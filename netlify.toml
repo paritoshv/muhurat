@@ -1,0 +1,5 @@
+# Netlify hosts the solo build only. Room-code multiplayer needs the WebSocket
+# server in src/server, which Netlify cannot run.
+[build]
+  command = "npm run build"
+  publish = "dist/site"
