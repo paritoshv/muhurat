@@ -1,5 +1,14 @@
-# Netlify hosts the solo build only. Room-code multiplayer needs the WebSocket
-# server in src/server, which Netlify cannot run.
+# Netlify hosts the solo build and the daily leaderboard function. Room-code
+# multiplayer needs the WebSocket server in src/server, which Netlify cannot run.
 [build]
   command = "npm run build"
   publish = "dist/site"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# The page is one inlined file; it must never be cached or a redeploy reaches nobody.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

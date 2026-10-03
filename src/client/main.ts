@@ -1,8 +1,10 @@
 import { W, H, dailySeed } from '../shared/sim';
-import { draw } from './render';
+import { draw, type Joy, type View } from './render';
 import { LocalRoom, RemoteRoom, type Room } from './net';
+import { boardName, fetchBoard, postScore, renderBoard } from './board';
 
-declare const SOLO_ONLY: boolean; // true in the single-file build, which has no server
+declare const SOLO_ONLY: boolean; // no room server behind this build
+declare const BOARD: boolean;     // a leaderboard API is served next to this build
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('lawn'), g = canvas.getContext('2d')!;
@@ -14,6 +16,7 @@ const store = {
   set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* storage may be unavailable */ } },
 };
 nameIn.value = store.get('muhurat-name') ?? '';
+const say = (text: string) => { msg.textContent = text; msg.hidden = !text; };
 
 // Links carry a seed (#s-...) or a room (#r-ABCDE) in the hash.
 const hash = location.hash.slice(1);
@@ -21,16 +24,27 @@ let seed = hash.startsWith('s-') ? hash.slice(2) : dailySeed();
 if (hash.startsWith('r-')) codeIn.value = hash.slice(2).toUpperCase();
 $('seedline').textContent = hash.startsWith('s-') ? `Shaadi: ${seed}` : "Today's shaadi is the same for everyone.";
 if (SOLO_ONLY) $('rooms').hidden = true;
+if (matchMedia('(pointer: coarse)').matches) $('howto').textContent += ' Drag anywhere to walk.';
+else $('howto').textContent += ' Move with WASD or the arrow keys. Space drops what you hold.';
 
-let room: Room | null = null, shownResult: unknown = null;
+async function showMenuBoard() {
+  if (!BOARD) return;
+  const top = await fetchBoard(dailySeed());
+  if (!top) return;
+  $('menuboard').hidden = false; $('menuempty').hidden = top.length > 0;
+  renderBoard($('menulist'), top, null, 5);
+}
+showMenuBoard();
+
+let room: Room | null = null, shownResult = '';
 const playerName = () => { const n = nameIn.value.trim().slice(0, 12) || 'Bhaiya'; store.set('muhurat-name', n); return n; };
-function enter(r: Room) { room = r; menu.hidden = true; msg.textContent = ''; }
+function enter(r: Room) { room = r; menu.hidden = true; say(''); }
 
 $('solo').onclick = () => enter(new LocalRoom(seed, playerName()));
 $('create').onclick = () => enter(new RemoteRoom({ t: 'create', name: playerName(), seed }));
 $('join').onclick = () => {
   const code = codeIn.value.trim().toUpperCase();
-  if (code.length !== 5) { msg.textContent = 'Room codes are 5 characters.'; return; }
+  if (code.length !== 5) { say('Room codes are 5 characters. Check the code and try again.'); return; }
   enter(new RemoteRoom({ t: 'join', name: playerName(), room: code }));
 };
 startBtn.onclick = () => room?.start();
@@ -38,13 +52,13 @@ $('again').onclick = () => room?.start();
 $('fresh').onclick = () => { seed = 'shaadi-' + Math.random().toString(36).slice(2, 8); room?.start(seed); };
 $('copy').onclick = async () => {
   const link = `${location.origin}${location.pathname}#s-${room?.state?.seed ?? seed}`;
-  const out = $<HTMLInputElement>('link'); out.value = link; out.hidden = false;
-  try { await navigator.clipboard.writeText(link); $('copy').textContent = 'Link copied'; } catch { out.select(); }
+  const out = $<HTMLInputElement>('link'); out.value = link;
+  try { await navigator.clipboard.writeText(link); $('copy').textContent = 'Link copied'; } catch { out.hidden = false; out.select(); }
 };
 
-// Input: keys, or drag anywhere on the lawn.
+// Input: keys, or one finger dragged anywhere on the lawn.
 const keys = new Set<string>();
-let drag: { x: number; y: number; dx: number; dy: number } | null = null, dropQueued = false;
+let drag: (Joy & { id: number; ox: number; oy: number }) | null = null, dropQueued = false;
 addEventListener('keydown', e => {
   if (e.target instanceof HTMLInputElement) return;
   keys.add(e.code);
@@ -52,11 +66,21 @@ addEventListener('keydown', e => {
   if (e.code === 'Enter' && room?.state && room.state.phase !== 'run') room.start();
 });
 addEventListener('keyup', e => keys.delete(e.code));
-canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, dx: 0, dy: 0 }; canvas.setPointerCapture(e.pointerId); });
-canvas.addEventListener('pointermove', e => { if (drag) { drag.dx = Math.max(-1, Math.min(1, (e.clientX - drag.x) / 40)); drag.dy = Math.max(-1, Math.min(1, (e.clientY - drag.y) / 40)); } });
+canvas.addEventListener('pointerdown', e => {
+  if (drag) return; // a second finger does not steal the stick
+  const r = canvas.getBoundingClientRect();
+  drag = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX - r.left, y: e.clientY - r.top, dx: 0, dy: 0 };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = (e.clientX - drag.ox) / 44, dy = (e.clientY - drag.oy) / 44, m = Math.max(1, Math.hypot(dx, dy));
+  drag.dx = dx / m; drag.dy = dy / m;
+});
 const endDrag = () => { drag = null; };
-canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
-dropBtn.onclick = () => { dropQueued = true; };
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(ev, endDrag);
+addEventListener('blur', () => { endDrag(); keys.clear(); });
+dropBtn.addEventListener('pointerdown', () => { dropQueued = true; });
 
 let lastSent = '', lastSendAt = 0;
 function sendInput(now: number) {
@@ -68,33 +92,55 @@ function sendInput(now: number) {
   if (sig !== lastSent || dropQueued || now - lastSendAt > 0.25) { room.input(dx, dy, dropQueued); lastSent = sig; lastSendAt = now; dropQueued = false; }
 }
 
+// Big screens show the whole lawn. Small ones keep people a readable size and follow the player.
+const view: View = { z: 1, vw: W, vh: H, dpr: 1 };
 function fit() {
-  const box = $('stage').getBoundingClientRect(), k = Math.min(box.width / W, box.height / H), dpr = Math.min(2, devicePixelRatio || 1);
-  canvas.style.width = `${W * k}px`; canvas.style.height = `${H * k}px`;
-  canvas.width = Math.round(W * k * dpr); canvas.height = Math.round(H * k * dpr);
-  g.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+  const box = canvas.parentElement!.getBoundingClientRect();
+  const z = Math.max(Math.min(box.width / W, box.height / H), 0.8);
+  const cw = Math.min(box.width, W * z), ch = Math.min(box.height, H * z), dpr = Math.min(2, devicePixelRatio || 1);
+  canvas.style.width = `${cw}px`; canvas.style.height = `${ch}px`;
+  canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+  Object.assign(view, { z, vw: cw / z, vh: ch / z, dpr });
 }
 addEventListener('resize', fit); fit();
+
+// A finished solo run of today's shaadi goes to the board; the server replays the inputs to score it.
+async function postRun(r: LocalRoom, runSeed: string) {
+  const box = $('endboard'), note = $('boardmsg'), list = $('endlist');
+  box.hidden = false; list.replaceChildren(); note.textContent = 'Posting your run to the board…';
+  const me = boardName(playerName());
+  const res = await postScore(runSeed, me, r.log);
+  if (!res) { note.textContent = 'Could not reach the board. Your run was not posted; play again to retry.'; return; }
+  if ('error' in res) { note.textContent = `Not posted. ${res.error}`; return; }
+  note.textContent = `You are #${res.rank} today with ${res.score}.`;
+  renderBoard(list, res.top, me, 20);
+  list.querySelectorAll('li').forEach((li, i) => { li.style.animationDelay = `${Math.min(i, 8) * 50}ms`; });
+  list.querySelector('.me')?.scrollIntoView({ block: 'nearest' });
+}
 
 function frame(ms: number) {
   const now = ms / 1000;
   sendInput(now);
-  if (room?.error) { msg.textContent = room.error; room.close(); room = null; menu.hidden = false; endCard.hidden = true; }
+  if (room?.error) { say(room.error); room.close(); room = null; menu.hidden = false; endCard.hidden = true; }
   const s = room?.state;
   if (room && s) {
-    draw(g, s, room.myId, now, room.code);
+    draw(g, s, room.myId, now, room.code, view, drag && s.phase !== 'over' ? drag : null);
     if (room.code && location.hash !== '#r-' + room.code) history.replaceState(null, '', '#r-' + room.code);
     startBtn.hidden = s.phase !== 'lobby'; dropBtn.hidden = s.phase !== 'run';
-    if (s.phase === 'over' && s.result && shownResult !== s.result.headline + s.t) {
-      shownResult = s.result.headline + s.t;
+    const key = s.result ? s.result.headline + s.seed + s.served : '';
+    if (s.phase === 'over' && s.result && shownResult !== key) {
+      shownResult = key;
       $('verdict').textContent = s.result.won ? 'Shaadi ho gayi!' : 'Naak kat gayi';
       endCard.dataset.won = String(s.result.won);
       $('headline').textContent = s.result.headline;
-      $('score').textContent = `Score ${s.result.score}  ·  ${s.served} served  ·  ${s.seed}`;
+      $('score').textContent = `Score ${s.result.score}  ·  ${s.served} served`;
       $('copy').textContent = 'Copy link to this shaadi'; $<HTMLInputElement>('link').hidden = true;
+      $('endboard').hidden = true;
+      if (BOARD && room instanceof LocalRoom && s.seed === dailySeed()) postRun(room, s.seed);
     }
+    if (s.phase !== 'over') shownResult = '';
     endCard.hidden = s.phase !== 'over';
-  } else { g.fillStyle = '#15493e'; g.fillRect(0, 0, W, H); startBtn.hidden = true; dropBtn.hidden = true; }
+  } else { g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#15493e'; g.fillRect(0, 0, canvas.width, canvas.height); startBtn.hidden = true; dropBtn.hidden = true; }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

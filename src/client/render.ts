@@ -79,8 +79,18 @@ function horse(g: CanvasRenderingContext2D, x: number, y: number, flip: boolean,
 
 let dark: HTMLCanvasElement | null = null;
 
-export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: number, code: string | null) {
+/** z: CSS px per world unit. vw/vh: how much of the lawn the canvas shows. Small screens show part of it and follow the player. */
+export interface View { z: number; vw: number; vh: number; dpr: number }
+export interface Joy { x: number; y: number; dx: number; dy: number }
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: number, code: string | null, view: View, joy: Joy | null) {
   const dt = Math.min(0.1, now - lastNow || 0.016); lastNow = now;
+  const me = s.players.find(p => p.id === myId);
+  const cam = me ? ease('cam', me.x, me.y, dt) : { x: W / 2, y: H / 2 };
+  const camX = clamp(cam.x - view.vw / 2, 0, Math.max(0, W - view.vw)), camY = clamp(cam.y - view.vh / 2, 0, Math.max(0, H - view.vh));
+  const k = view.z * view.dpr;
+  g.setTransform(k, 0, 0, k, -camX * k, -camY * k);
   // lawn
   g.fillStyle = C.lawn; g.fillRect(0, 0, W, H);
   g.fillStyle = C.lawn2; for (let y = 0; y < H; y += 60) for (let x = (y / 60) % 2 ? 60 : 0; x < W; x += 120) g.fillRect(x, y, 60, 60);
@@ -174,33 +184,65 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   }
   g.globalAlpha = 1;
 
-  // HUD
-  g.fillStyle = 'rgba(8,20,18,.92)'; g.fillRect(0, 0, W, 42);
-  text(g, 'IZZAT', 16, 22, `800 12px ${BODY}`, C.cream, 'left');
-  g.fillStyle = 'rgba(255,255,255,.14)'; rr(g, 64, 13, 220, 16, 8); g.fill();
-  const iz = Math.max(0, Math.min(100, s.izzat));
-  g.fillStyle = iz > 50 ? C.good : iz > 25 ? C.marigold : C.danger; rr(g, 64, 13, 2.2 * iz, 16, 8); g.fill();
-  text(g, String(Math.round(iz)), 296, 22, `800 14px ${BODY}`, C.cream, 'left');
-  const left = Math.max(0, s.muhurat - s.t);
-  text(g, s.phase === 'lobby' ? 'Muhurat' : `Muhurat in ${clock(left)}`, W / 2, 22, `22px ${DISPLAY}`, left < 30 && s.phase === 'run' ? C.danger : C.marigold);
-  text(g, `${code ? 'Room ' + code : 'Solo'}  ·  served ${s.served}`, W - 16, 22, `800 13px ${BODY}`, C.cream, 'right');
+  // ---- screen layer: everything below is pinned to the canvas, not the lawn ----
+  g.setTransform(k, 0, 0, k, 0, 0);
+  const VW = view.vw, VH = view.vh, narrow = VW < 700;
+  const tone = (pc: number) => pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.danger;
 
-  let by = 60;
-  for (const d of s.disasters) {
-    g.font = `800 13px ${BODY}`; const w = g.measureText(BANNERS[d.kind]).width + 28;
-    g.fillStyle = C.danger; rr(g, W / 2 - w / 2, by, w, 26, 13); g.fill();
-    text(g, BANNERS[d.kind], W / 2, by + 14, `800 13px ${BODY}`, '#fff'); by += 32;
+  // a waiting guest who is off screen gets pinned to the nearest edge
+  const pin = (wx: number, wy: number, col: string, body: (x: number, y: number) => void) => {
+    const sx = wx - camX, sy = wy - camY;
+    if (sx > 0 && sx < VW && sy > 44 && sy < VH) return;
+    const ex = clamp(sx, 26, VW - 26), ey = clamp(sy, 72, VH - 30), a = Math.atan2(sy - ey, sx - ex);
+    g.fillStyle = col; g.beginPath();
+    g.moveTo(ex + Math.cos(a) * 27, ey + Math.sin(a) * 27); g.lineTo(ex + Math.cos(a + 0.5) * 17, ey + Math.sin(a + 0.5) * 17); g.lineTo(ex + Math.cos(a - 0.5) * 17, ey + Math.sin(a - 0.5) * 17); g.closePath(); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(ex, ey, 15, 0, 7); g.fill();
+    body(ex, ey);
+  };
+  for (const q of s.guests) if (q.state === 'waiting' && q.want) {
+    const pc = Math.max(0, q.patience), want = q.want;
+    pin(q.x + 20, q.y - 40, tone(pc), (x, y) => { g.strokeStyle = tone(pc); g.lineWidth = 4; g.beginPath(); g.arc(x, y, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pc); g.stroke(); drawItem(g, want, x, y + 1); });
   }
-  let ty = H - 26;
+  if (has('bijli')) pin(GEN.x, GEN.y, C.marigold, (x, y) => text(g, 'GEN', x, y + 1, `800 10px ${BODY}`, C.ink));
+
+  // HUD bar
+  g.fillStyle = 'rgba(8,20,18,.94)'; g.fillRect(0, 0, VW, 42);
+  const iz = Math.max(0, Math.min(100, s.izzat)), bx = narrow ? 58 : 64, bw = narrow ? Math.max(70, VW * 0.22) : 220;
+  text(g, 'IZZAT', narrow ? 10 : 16, 22, `800 12px ${BODY}`, C.cream, 'left');
+  g.fillStyle = 'rgba(255,255,255,.16)'; rr(g, bx, 13, bw, 16, 8); g.fill();
+  if (iz > 0) { g.fillStyle = iz > 50 ? C.good : iz > 25 ? C.marigold : C.danger; rr(g, bx, 13, Math.max(16, bw * iz / 100), 16, 8); g.fill(); }
+  text(g, String(Math.round(iz)), bx + bw + 8, 22, `800 14px ${BODY}`, C.cream, 'left');
+  const left = Math.max(0, s.muhurat - s.t), urgent = left < 30 && s.phase === 'run';
+  const clockText = s.phase === 'lobby' ? 'Muhurat' : narrow ? clock(left) : `Muhurat in ${clock(left)}`;
+  text(g, clockText, narrow ? VW - 12 : VW / 2, 23, `${narrow ? 24 : 22}px ${DISPLAY}`, urgent ? C.danger : C.marigold, narrow ? 'right' : 'center');
+  if (!narrow) text(g, `${code ? 'Room ' + code : 'Solo'}  ·  ${s.served} served`, VW - 16, 22, `800 13px ${BODY}`, C.cream, 'right');
+  else text(g, `${s.served} served`, VW - 78, 23, `800 12px ${BODY}`, C.cream, 'right');
+
+  let by = 54;
+  for (const d of s.disasters) {
+    g.font = `800 13px ${BODY}`;
+    const full = BANNERS[d.kind], label = g.measureText(full).width + 28 > VW - 16 ? full.split('  ·  ')[0] : full, w = g.measureText(label).width + 28;
+    g.fillStyle = C.danger; rr(g, VW / 2 - w / 2, by, w, 26, 13); g.fill();
+    text(g, label, VW / 2, by + 14, `800 13px ${BODY}`, '#fff'); by += 32;
+  }
+  let ty = VH - (narrow ? 86 : 28);
   for (const t of s.toasts.slice().reverse()) {
-    const a = Math.max(0, 1 - (s.t - t.t) / 4); g.globalAlpha = Math.min(1, a * 2);
-    g.font = `600 14px ${BODY}`; const w = g.measureText(t.text).width + 24;
-    g.fillStyle = 'rgba(8,20,18,.88)'; rr(g, W / 2 - w / 2, ty - 13, w, 26, 8); g.fill();
-    text(g, t.text, W / 2, ty + 1, `600 14px ${BODY}`, C.cream); ty -= 30;
+    const age = s.t - t.t, a = Math.min(1, age / 0.2, (4 - age) / 0.4); if (a <= 0) continue;
+    g.globalAlpha = a; g.font = `600 14px ${BODY}`;
+    const w = Math.min(VW - 16, g.measureText(t.text).width + 24), rise = (1 - Math.min(1, age / 0.2)) * 8;
+    g.fillStyle = 'rgba(8,20,18,.9)'; rr(g, VW / 2 - w / 2, ty - 13 + rise, w, 26, 8); g.fill();
+    g.save(); g.beginPath(); g.rect(VW / 2 - w / 2 + 8, ty - 13, w - 16, 40); g.clip();
+    text(g, t.text, VW / 2, ty + 1 + rise, `600 14px ${BODY}`, C.cream); g.restore(); ty -= 30;
   }
   g.globalAlpha = 1;
   if (s.phase === 'lobby') {
-    text(g, 'The lawn is ready. Walk around while the crew joins.', W / 2, 250, `600 18px ${BODY}`, C.cream);
-    if (code) text(g, `Tell your friends the code: ${code}`, W / 2, 284, `26px ${DISPLAY}`, C.marigold);
+    text(g, narrow ? 'The lawn is ready.' : 'The lawn is ready. Walk around while the crew joins.', VW / 2, VH * 0.4, `600 ${narrow ? 16 : 18}px ${BODY}`, C.cream);
+    if (code) text(g, narrow ? `Room code ${code}` : `Tell your friends the code: ${code}`, VW / 2, VH * 0.4 + 34, `${narrow ? 22 : 26}px ${DISPLAY}`, C.marigold);
+  }
+  // touch joystick, shown where the thumb landed
+  if (joy) {
+    const jx = joy.x / view.z, jy = joy.y / view.z, r = 44 / view.z;
+    g.strokeStyle = 'rgba(255,243,214,.5)'; g.lineWidth = 2; g.beginPath(); g.arc(jx, jy, r, 0, 7); g.stroke();
+    g.fillStyle = 'rgba(255,243,214,.75)'; g.beginPath(); g.arc(jx + joy.dx * r, jy + joy.dy * r, r * 0.42, 0, 7); g.fill();
   }
 }

@@ -1,5 +1,6 @@
 // A Room hides where the simulation runs: in this tab (solo) or on the server (room code).
 import { Sim, type State } from '../shared/sim';
+import { TICK, quant, type InputLog } from '../shared/replay';
 
 export interface Room {
   state: State | null; myId: string; code: string | null; error: string | null;
@@ -10,13 +11,29 @@ export interface Room {
 
 export class LocalRoom implements Room {
   myId = 'me'; code = null; error = null; state: State | null;
-  private sim: Sim; private timer: number;
+  /** Inputs of the current run, tick by tick. The leaderboard replays this. */
+  log: InputLog = [];
+  private sim: Sim; private timer: number; private tick = 0; private last = '';
+  private pending = { dx: 0, dy: 0, drop: false };
   constructor(seed: string, name: string) {
     this.sim = new Sim(seed); this.sim.addPlayer('me', name); this.state = this.sim.s;
-    this.timer = window.setInterval(() => { this.sim.step(1 / 30); this.state = this.sim.s; }, 1000 / 30);
+    this.timer = window.setInterval(() => this.step(), 1000 * TICK);
   }
-  input(dx: number, dy: number, drop: boolean) { this.sim.setInput('me', dx, dy, drop); }
-  start(seed?: string) { this.sim.start(seed); this.state = this.sim.s; }
+  private step() {
+    const p = this.pending;
+    if (this.sim.s.phase === 'run') {
+      const sig = `${p.dx},${p.dy}`;
+      if (sig !== this.last || p.drop || this.tick === 0) {
+        this.log.push([this.tick, p.dx, p.dy, p.drop ? 1 : 0]);
+        this.sim.setInput('me', p.dx, p.dy, p.drop); this.last = sig;
+      }
+      this.tick++;
+    } else this.sim.setInput('me', p.dx, p.dy, false);
+    p.drop = false;
+    this.sim.step(TICK); this.state = this.sim.s;
+  }
+  input(dx: number, dy: number, drop: boolean) { this.pending.dx = quant(dx); this.pending.dy = quant(dy); if (drop) this.pending.drop = true; }
+  start(seed?: string) { this.sim.start(seed); this.state = this.sim.s; this.tick = 0; this.log = []; this.last = ''; }
   close() { clearInterval(this.timer); }
 }
 
