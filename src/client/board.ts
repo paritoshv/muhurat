@@ -32,6 +32,7 @@ export function renderBoard(list: HTMLElement, top: Entry[], me: string | null, 
     if (e.name === me) li.className = 'me';
     const cell = (cls: string, text: string) => { const s = document.createElement('span'); s.className = cls; s.textContent = text; return s; };
     li.append(cell('rank', String(i + 1)), cell('who', e.name), cell('pts', String(e.score)));
+    li.style.animationDelay = `${Math.min(i, 8) * 50}ms`; // 50ms stagger, capped so a long board never feels slow
     list.append(li);
   });
 }

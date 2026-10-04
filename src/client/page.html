@@ -3,9 +3,10 @@
 <style>
 /* Layout: one screen. The wedding lawn fills the frame; menus sit over it like an invitation card. */
 :root {
-  --night: #0b1f1c; --lawn: #15493e; --marigold: #f6a821; --rani: #c9256a; --cream: #fff3d6; --ink: #0a1614; --ink-soft: #3d4a3f; --danger: #c93426; --good: #58c777;
+  --night: #0b1f1c; --lawn: #15493e; --marigold: #f6a821; --rani: #c9256a; --cream: #fff3d6; --ink: #0a1614; --ink-soft: #5a4720; --danger: #c93426; --alarm: #ff8f80; --good: #58c777;
+  --ink-hover: #1c2d29; --rani-hover: #b01f5c; --marigold-hover: #ffb93d;
   --display: "Yatra One", "Trebuchet MS", sans-serif; --body: Mukta, "Segoe UI", system-ui, sans-serif;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --t-press: 160ms; --t-card: 250ms; --t-row: 240ms;
   color-scheme: dark;
 }
 [hidden] { display: none !important; }
@@ -18,11 +19,11 @@ body { background: var(--night); color: var(--cream); font-family: var(--body); 
 canvas { display: block; border-radius: 12px; background: var(--lawn); touch-action: none; user-select: none; -webkit-user-select: none; }
 
 /* The invitation card: a double frame in marigold and rani, no shadow. */
-.card { position: absolute; z-index: 2; left: 50%; top: 50%; translate: -50% -50%; width: min(420px, calc(100% - 32px)); max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; background: var(--cream); color: var(--ink); border: 3px solid var(--marigold); outline: 3px solid var(--rani); outline-offset: 3px; border-radius: 12px; padding: 24px 20px 20px; display: flex; flex-direction: column; gap: 16px; text-align: center; animation: card-in 250ms var(--ease-out); }
+.card { position: absolute; z-index: 2; left: 50%; top: 50%; translate: -50% -50%; width: min(420px, calc(100% - 32px)); max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; background: var(--cream); color: var(--ink); border: 3px solid var(--marigold); outline: 3px solid var(--rani); outline-offset: 3px; border-radius: 12px; padding: 24px 20px 20px; display: flex; flex-direction: column; gap: 16px; text-align: center; animation: card-in var(--t-card) var(--ease-out); }
 @keyframes card-in { from { opacity: 0; transform: scale(0.96); } }
 h1 { font-family: var(--display); font-weight: 400; font-size: 56px; line-height: 1; margin: 0; color: var(--rani); }
 h2 { font-family: var(--display); font-weight: 400; font-size: 34px; line-height: 1.05; margin: 0; color: var(--rani); text-wrap: balance; }
-h3 { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin: 0; color: var(--ink-soft); }
+.sub { font-family: var(--body); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin: 0; line-height: 1.4; color: var(--ink-soft); }
 #end[data-won="false"] h2 { color: var(--danger); }
 p { margin: 0; line-height: 1.4; text-wrap: pretty; }
 .small { font-size: 14px; color: var(--ink-soft); }
@@ -31,25 +32,27 @@ p { margin: 0; line-height: 1.4; text-wrap: pretty; }
 .row > * { flex: 1 1 120px; min-width: 0; }
 label { font-size: 14px; font-weight: 800; text-align: left; color: var(--ink-soft); }
 input { font: inherit; font-size: 16px; min-height: 48px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; color: var(--ink); caret-color: var(--rani); box-sizing: border-box; width: 100%; color-scheme: light; }
-input::placeholder { color: #5d6a60; }
+input::placeholder { color: #6b5a36; }
 #code { text-transform: uppercase; letter-spacing: 0.2em; font-weight: 800; text-align: center; }
-button { font: inherit; font-weight: 800; min-height: 48px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--ink); color: var(--cream); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform 160ms var(--ease-out), background-color 160ms ease; }
+button { font: inherit; font-weight: 800; min-height: 48px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--ink); color: var(--cream); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform var(--t-press) var(--ease-out), background-color var(--t-press) ease; }
 button.main { background: var(--rani); color: #fff; font-size: 18px; min-height: 52px; }
 button:active { transform: scale(0.97); }
-@media (hover: hover) and (pointer: fine) { button:hover { background: #1c2d29; } button.main:hover { background: #b01f5c; } #start:hover { background: #ffb93d; } }
+@media (hover: hover) and (pointer: fine) { button:hover { background: var(--ink-hover); } button.main:hover { background: var(--rani-hover); } #start:hover { background: var(--marigold-hover); } }
 button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); outline-offset: 2px; }
 #msg { color: var(--danger); font-weight: 800; }
 #headline { font-size: 18px; font-weight: 600; }
 
 /* Leaderboard rows */
-.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow-y: auto; overscroll-behavior: contain; font-variant-numeric: tabular-nums; text-align: left; }
-.board li { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; padding: 6px 10px; border-radius: 6px; animation: row-in 300ms var(--ease-out) backwards; }
+.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--marigold) transparent; font-variant-numeric: tabular-nums; text-align: left; }
+.board li { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; padding: 6px 10px; border-radius: 6px; animation: row-in var(--t-row) var(--ease-out) backwards; }
 .board li:nth-child(odd) { background: rgba(10, 22, 20, 0.06); }
 .board li.me { background: var(--marigold); font-weight: 800; }
 .board .rank { color: var(--ink-soft); } .board li.me .rank { color: var(--ink); }
 .board .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.04em; }
 .board .pts { font-weight: 800; }
 @keyframes row-in { from { opacity: 0; transform: translateY(8px); } }
+/* The menu board loads after the card is on screen; its space is held so the card does not jump. */
+#menuboard { min-height: 222px; }
 
 .float { position: absolute; z-index: 1; bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
 #start { left: 50%; translate: -50% 0; background: var(--marigold); color: var(--ink); font-size: 20px; min-height: 56px; padding: 0 28px; }
@@ -63,7 +66,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
 }
 </style>
 <div id="stage">
-  <div class="fit"><canvas id="lawn" aria-label="The wedding lawn"></canvas></div>
+  <div class="fit"><canvas id="lawn" role="img" aria-label="The wedding lawn, where the game is played"></canvas></div>
   <div id="menu" class="card">
     <h1>Muhurat</h1>
     <div class="group">
@@ -82,20 +85,20 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
       <button id="join">Join room</button>
     </div>
     <div id="menuboard" class="group" hidden>
-      <h3>Today's board</h3>
+      <h2 class="sub">Today's board</h2>
+      <p id="menunote" class="small" role="status">Loading today's board…</p>
       <ol id="menulist" class="board"></ol>
-      <p id="menuempty" class="small" hidden>Nobody has finished today's shaadi yet. Be the first.</p>
     </div>
     <p id="msg" role="alert" hidden></p>
   </div>
-  <div id="end" class="card" hidden>
+  <div id="end" class="card" role="dialog" aria-labelledby="verdict" hidden>
     <div class="group">
       <h2 id="verdict"></h2>
       <p id="headline"></p>
       <p id="score" class="small"></p>
     </div>
     <div id="endboard" class="group" hidden>
-      <h3>Today's board</h3>
+      <h2 class="sub">Today's board</h2>
       <p id="boardmsg" class="small" role="status"></p>
       <ol id="endlist" class="board"></ol>
     </div>

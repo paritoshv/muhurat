@@ -2,7 +2,16 @@
 // same on every device (no emoji, no image assets).
 import { W, H, STATIONS, GEN, GATE, MANDAP, SPOTS, clock, type State, type Item, type Kind, type DKind } from '../shared/sim';
 
-const C = { night: '#0b1f1c', lawn: '#15493e', lawn2: '#134238', marigold: '#f6a821', rani: '#e0347a', cream: '#fff3d6', ink: '#0a1614', danger: '#e5483b', good: '#58c777', skin: '#c98d5e' };
+// Colors come from the page's CSS tokens so the lawn and the cards cannot drift apart.
+// danger is for fills that carry white text; alarm is the same signal as text or a stroke on dark.
+const token = (name: string, fallback: string) => { try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback; } catch { return fallback; } };
+const C = { night: token('--night', '#0b1f1c'), lawn: token('--lawn', '#15493e'), lawn2: '#134238', marigold: token('--marigold', '#f6a821'), rani: token('--rani', '#c9256a'), cream: token('--cream', '#fff3d6'), ink: token('--ink', '#0a1614'), danger: token('--danger', '#c93426'), alarm: token('--alarm', '#ff8f80'), good: token('--good', '#58c777'), skin: '#c98d5e' };
+// Reduced motion keeps fades and state changes, and drops shake, wobble, twinkle, rises and confetti.
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+const easeOut = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 5);
+const floats: { x: number; y: number; text: string; t0: number }[] = [];
+const prevGuest = new Map<number, string>(), bannerSeen = new Map<string, number>();
+let lastSimT = 0, petalsAt = -1, petalsKey = '';
 export const PLAYER_COLORS = ['#f6a821', '#4cc3ff', '#e0347a', '#8ee06b', '#c59bff', '#ff8a5c'];
 const DISPLAY = '"Yatra One", "Trebuchet MS", sans-serif', BODY = 'Mukta, "Segoe UI", system-ui, sans-serif';
 const BANNERS: Record<DKind, string> = {
@@ -48,7 +57,7 @@ const BODY_COL: Record<Kind, string> = { fufaji: '#8d99a6', bua: '#d6457f', mama
 function person(g: CanvasRenderingContext2D, x: number, y: number, body: string, kind: Kind | 'player' | 'chintu', now: number, small = false) {
   const k = small ? 0.72 : 1;
   g.save(); g.translate(x, y); g.scale(k, k);
-  if (kind === 'mama') g.rotate(Math.sin(now * 2.2) * 0.16);
+  if (kind === 'mama' && !calm.matches) g.rotate(Math.sin(now * 2.2) * 0.16);
   g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(0, 15, 14, 5, 0, 0, 7); g.fill();
   g.fillStyle = body; g.beginPath(); g.moveTo(-13, 14); g.quadraticCurveTo(-14, -8, 0, -8); g.quadraticCurveTo(14, -8, 13, 14); g.closePath(); g.fill();
   if (kind === 'player') { g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(-6, 0, 12, 12); }
@@ -86,6 +95,8 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: number, code: string | null, view: View, joy: Joy | null) {
   const dt = Math.min(0.1, now - lastNow || 0.016); lastNow = now;
+  if (s.t < lastSimT) { floats.length = 0; prevGuest.clear(); bannerSeen.clear(); petalsAt = -1; } // a new run began
+  lastSimT = s.t;
   const me = s.players.find(p => p.id === myId);
   const cam = me ? ease('cam', me.x, me.y, dt) : { x: W / 2, y: H / 2 };
   const camX = clamp(cam.x - view.vw / 2, 0, Math.max(0, W - view.vw)), camY = clamp(cam.y - view.vh / 2, 0, Math.max(0, H - view.vh));
@@ -120,25 +131,27 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   }
   // generator
   g.fillStyle = '#5d6b70'; rr(g, GEN.x - 30, GEN.y - 22, 60, 44, 6); g.fill();
-  g.fillStyle = has('bijli') ? C.danger : C.marigold; g.beginPath(); g.moveTo(GEN.x + 3, GEN.y - 16); g.lineTo(GEN.x - 9, GEN.y + 3); g.lineTo(GEN.x - 1, GEN.y + 3); g.lineTo(GEN.x - 4, GEN.y + 16); g.lineTo(GEN.x + 9, GEN.y - 4); g.lineTo(GEN.x + 1, GEN.y - 4); g.closePath(); g.fill();
+  g.fillStyle = has('bijli') ? C.alarm : C.marigold; g.beginPath(); g.moveTo(GEN.x + 3, GEN.y - 16); g.lineTo(GEN.x - 9, GEN.y + 3); g.lineTo(GEN.x - 1, GEN.y + 3); g.lineTo(GEN.x - 4, GEN.y + 16); g.lineTo(GEN.x + 9, GEN.y - 4); g.lineTo(GEN.x + 1, GEN.y - 4); g.closePath(); g.fill();
   text(g, 'GENERATOR', GEN.x, GEN.y + 32, `800 10px ${BODY}`, C.cream);
 
   // people, sorted by depth
   type D = { y: number; f: () => void };
   const list: D[] = [];
   for (const q of s.guests) {
-    const p = ease('g' + q.id, q.x, q.y, dt);
+    const p = ease('g' + q.id, q.x, q.y, dt), was = prevGuest.get(q.id);
+    if (was === 'waiting' && (q.state === 'content' || q.happy)) floats.push({ x: q.x, y: q.y - 46, text: q.kind === 'dadi' ? '+4 izzat' : '+1', t0: now });
+    prevGuest.set(q.id, q.state);
     list.push({ y: p.y, f: () => {
       person(g, p.x, p.y, BODY_COL[q.kind], q.kind, now, q.kind === 'dadi');
       if (q.kind !== 'baraati') text(g, q.name, p.x, p.y + 27, `800 11px ${BODY}`, C.cream);
       if (q.state === 'waiting' && q.want) {
         const bx = p.x + 20, by = p.y - 40, pc = Math.max(0, q.patience);
-        const shake = pc < 0.3 ? Math.sin(now * 40) * 2 : 0;
+        const shake = pc < 0.3 && !calm.matches ? Math.sin(now * 40) * 2 : 0;
         g.fillStyle = '#fff'; g.beginPath(); g.arc(bx + shake, by, 16, 0, 7); g.fill();
-        g.strokeStyle = pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.danger; g.lineWidth = 4;
+        g.strokeStyle = pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.alarm; g.lineWidth = 4;
         g.beginPath(); g.arc(bx + shake, by, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pc); g.stroke();
         drawItem(g, q.want, bx + shake, by + 1);
-      } else if (q.state === 'leaving') text(g, q.happy ? 'shukriya!' : 'hmph!', p.x, p.y - 34, `800 12px ${BODY}`, q.happy ? C.good : C.danger);
+      } else if (q.state === 'leaving') text(g, q.happy ? 'shukriya!' : 'hmph!', p.x, p.y - 34, `800 12px ${BODY}`, q.happy ? C.good : C.alarm);
     } });
   }
   if (s.chintu) { const p = ease('c', s.chintu.x, s.chintu.y, dt); list.push({ y: p.y, f: () => { person(g, p.x, p.y, '#3fa66b', 'chintu', now, true); text(g, 'Chintu', p.x, p.y + 22, `800 10px ${BODY}`, C.cream); } }); }
@@ -148,21 +161,34 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
     list.push({ y: p.y, f: () => {
       if (q.id === myId) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 15, 18, 7, 0, 0, 7); g.stroke(); }
       person(g, p.x, p.y, col, 'player', now);
-      text(g, q.name, p.x, p.y + 29, `800 12px ${BODY}`, col);
+      text(g, q.name, p.x, p.y + 29, `800 12px ${BODY}`, C.cream);
       if (q.carry) drawItem(g, q.carry, p.x, p.y - 38, 1.4);
     } });
   }
   list.sort((a, b) => a.y - b.y).forEach(d => d.f());
 
+  // serve feedback: a small number lifts off the guest and fades (600ms)
+  for (let i = floats.length - 1; i >= 0; i--) {
+    const f = floats[i], pr = (now - f.t0) / 0.6;
+    if (pr >= 1) { floats.splice(i, 1); continue; }
+    g.globalAlpha = 1 - pr * pr;
+    const fy = f.y - (calm.matches ? 0 : 16 * easeOut(pr));
+    g.lineWidth = 3; g.strokeStyle = C.ink; g.font = `800 14px ${BODY}`; g.textAlign = 'center'; g.strokeText(f.text, f.x, fy);
+    text(g, f.text, f.x, fy, `800 14px ${BODY}`, C.good);
+  }
+  g.globalAlpha = 1;
+  if (prevGuest.size > 300) prevGuest.clear();
+
   // rain
   if (has('baarish')) {
     g.strokeStyle = 'rgba(190,225,255,.45)'; g.lineWidth = 1.5; g.beginPath();
-    for (let i = 0; i < 90; i++) { const x = (i * 97 + now * 260) % W, y = (i * 53 + now * 900) % H; g.moveTo(x, y); g.lineTo(x - 5, y + 16); }
+    const rt = calm.matches ? 0 : now; // reduced motion: the rain is drawn but does not fall
+    for (let i = 0; i < 90; i++) { const x = (i * 97 + rt * 260) % W, y = (i * 53 + rt * 900) % H; g.moveTo(x, y); g.lineTo(x - 5, y + 16); }
     g.stroke();
   }
   // power cut: darkness with pools of light around the crew
   if (has('bijli')) {
-    dark ??= document.createElement('canvas'); dark.width = W; dark.height = H;
+    if (!dark) { dark = document.createElement('canvas'); dark.width = W; dark.height = H; } // allocated once, not per frame
     const d = dark.getContext('2d')!;
     d.globalCompositeOperation = 'source-over'; d.fillStyle = 'rgba(2,7,9,.93)'; d.fillRect(0, 0, W, H);
     d.globalCompositeOperation = 'destination-out';
@@ -180,14 +206,14 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   for (let i = 0; i <= 24; i++) {
     const x = i * 40, y = 50 + Math.sin(i * 0.52) * 5;
     g.fillStyle = has('bijli') ? '#39443f' : [C.marigold, C.rani, '#4cc3ff', C.good][i % 4];
-    g.globalAlpha = has('bijli') ? 1 : 0.65 + 0.35 * Math.sin(now * 3 + i); g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill();
+    g.globalAlpha = has('bijli') ? 1 : calm.matches ? 0.9 : 0.65 + 0.35 * Math.sin(now * 3 + i); g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill();
   }
   g.globalAlpha = 1;
 
   // ---- screen layer: everything below is pinned to the canvas, not the lawn ----
   g.setTransform(k, 0, 0, k, 0, 0);
   const VW = view.vw, VH = view.vh, narrow = VW < 700;
-  const tone = (pc: number) => pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.danger;
+  const tone = (pc: number) => pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.alarm;
 
   // a waiting guest who is off screen gets pinned to the nearest edge
   const pin = (wx: number, wy: number, col: string, body: (x: number, y: number) => void) => {
@@ -205,35 +231,57 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   }
   if (has('bijli')) pin(GEN.x, GEN.y, C.marigold, (x, y) => text(g, 'GEN', x, y + 1, `800 10px ${BODY}`, C.ink));
 
+  // one authored moment: marigold and rose petals fall when the shaadi is saved
+  if (s.phase === 'over' && s.result?.won && !calm.matches) {
+    const key = s.seed + s.served + s.result.score; if (petalsKey !== key || petalsAt < 0) { petalsKey = key; petalsAt = now; }
+    const age = now - petalsAt;
+    if (age < 4.5) for (let i = 0; i < 44; i++) {
+      const r1 = (i * 0.6180339) % 1, r2 = (i * 0.3819660 + 0.17) % 1, t = age - r2 * 1.2; if (t < 0) continue;
+      const x = r1 * VW + Math.sin(t * 1.6 + i) * 18, y = -12 + t * (110 + r2 * 90);
+      g.save(); g.translate(x, y); g.rotate(t * (1.5 + r1 * 2) + i); g.globalAlpha = Math.min(1, (4.5 - age) / 0.6);
+      g.fillStyle = i % 3 ? C.marigold : C.rani; g.beginPath(); g.ellipse(0, 0, 6, 3.2, 0, 0, 7); g.fill(); g.restore();
+    }
+  }
+
   // HUD bar
   g.fillStyle = 'rgba(8,20,18,.94)'; g.fillRect(0, 0, VW, 42);
-  const iz = Math.max(0, Math.min(100, s.izzat)), bx = narrow ? 58 : 64, bw = narrow ? Math.max(70, VW * 0.22) : 220;
+  const iz = Math.max(0, Math.min(100, ease('izzat', s.izzat, 0, dt).x)), bx = narrow ? 58 : 64, bw = narrow ? Math.max(70, VW * 0.22) : 220;
   text(g, 'IZZAT', narrow ? 10 : 16, 22, `800 12px ${BODY}`, C.cream, 'left');
   g.fillStyle = 'rgba(255,255,255,.16)'; rr(g, bx, 13, bw, 16, 8); g.fill();
-  if (iz > 0) { g.fillStyle = iz > 50 ? C.good : iz > 25 ? C.marigold : C.danger; rr(g, bx, 13, Math.max(16, bw * iz / 100), 16, 8); g.fill(); }
-  text(g, String(Math.round(iz)), bx + bw + 8, 22, `800 14px ${BODY}`, C.cream, 'left');
+  if (iz > 0) { g.fillStyle = iz > 50 ? C.good : iz > 25 ? C.marigold : C.alarm; rr(g, bx, 13, Math.max(16, bw * iz / 100), 16, 8); g.fill(); }
+  text(g, String(Math.max(0, Math.round(s.izzat))), bx + bw + 8, 22, `800 14px ${BODY}`, C.cream, 'left');
   const left = Math.max(0, s.muhurat - s.t), urgent = left < 30 && s.phase === 'run';
   const clockText = s.phase === 'lobby' ? 'Muhurat' : narrow ? clock(left) : `Muhurat in ${clock(left)}`;
-  text(g, clockText, narrow ? VW - 12 : VW / 2, 23, `${narrow ? 24 : 22}px ${DISPLAY}`, urgent ? C.danger : C.marigold, narrow ? 'right' : 'center');
+  text(g, clockText, narrow ? VW - 12 : VW / 2, 23, `${narrow ? 24 : 22}px ${DISPLAY}`, urgent ? C.alarm : C.marigold, narrow ? 'right' : 'center');
   if (!narrow) text(g, `${code ? 'Room ' + code : 'Solo'}  ·  ${s.served} served`, VW - 16, 22, `800 13px ${BODY}`, C.cream, 'right');
   else text(g, `${s.served} served`, VW - 78, 23, `800 12px ${BODY}`, C.cream, 'right');
 
+  // disaster banners arrive in 200ms from 96% scale; they leave at once
+  for (const key of bannerSeen.keys()) if (!s.disasters.some(d => d.kind === key)) bannerSeen.delete(key);
   let by = 54;
   for (const d of s.disasters) {
+    if (!bannerSeen.has(d.kind)) bannerSeen.set(d.kind, now);
+    const pr = (now - bannerSeen.get(d.kind)!) / 0.2, sc = calm.matches ? 1 : 0.96 + 0.04 * easeOut(pr);
     g.font = `800 13px ${BODY}`;
     const full = BANNERS[d.kind], label = g.measureText(full).width + 28 > VW - 16 ? full.split('  ·  ')[0] : full, w = g.measureText(label).width + 28;
-    g.fillStyle = C.danger; rr(g, VW / 2 - w / 2, by, w, 26, 13); g.fill();
-    text(g, label, VW / 2, by + 14, `800 13px ${BODY}`, '#fff'); by += 32;
+    g.save(); g.globalAlpha = Math.min(1, pr); g.translate(VW / 2, by + 13); g.scale(sc, sc);
+    g.fillStyle = C.danger; rr(g, -w / 2, -13, w, 26, 13); g.fill();
+    text(g, label, 0, 1, `800 13px ${BODY}`, '#fff'); g.restore(); by += 32;
   }
-  let ty = VH - (narrow ? 86 : 28);
-  for (const t of s.toasts.slice().reverse()) {
-    const age = s.t - t.t, a = Math.min(1, age / 0.2, (4 - age) / 0.4); if (a <= 0) continue;
+  // toasts: 200ms in with a short rise, 150ms out, and the stack glides when one leaves
+  const base = VH - (narrow ? 86 : 28), live = new Set<string>();
+  s.toasts.slice().reverse().forEach((t, i) => {
+    const age = s.t - t.t, a = Math.min(1, age / 0.2, (4 - age) / 0.15); if (a <= 0) return;
+    const key = 'toast' + t.t + t.text; live.add(key);
+    const ty = (shown.has(key) ? ease(key, 0, base - i * 30, dt) : ease(key, 0, base - i * 30, 1)).y;
+    const rise = calm.matches ? 0 : (1 - easeOut(age / 0.2)) * 10;
     g.globalAlpha = a; g.font = `600 14px ${BODY}`;
-    const w = Math.min(VW - 16, g.measureText(t.text).width + 24), rise = (1 - Math.min(1, age / 0.2)) * 8;
+    const w = Math.min(VW - 16, g.measureText(t.text).width + 24);
     g.fillStyle = 'rgba(8,20,18,.9)'; rr(g, VW / 2 - w / 2, ty - 13 + rise, w, 26, 8); g.fill();
     g.save(); g.beginPath(); g.rect(VW / 2 - w / 2 + 8, ty - 13, w - 16, 40); g.clip();
-    text(g, t.text, VW / 2, ty + 1 + rise, `600 14px ${BODY}`, C.cream); g.restore(); ty -= 30;
-  }
+    text(g, t.text, VW / 2, ty + 1 + rise, `600 14px ${BODY}`, C.cream); g.restore();
+  });
+  for (const key of shown.keys()) if (key.startsWith('toast') && !live.has(key)) shown.delete(key);
   g.globalAlpha = 1;
   if (s.phase === 'lobby') {
     text(g, narrow ? 'The lawn is ready.' : 'The lawn is ready. Walk around while the crew joins.', VW / 2, VH * 0.4, `600 ${narrow ? 16 : 18}px ${BODY}`, C.cream);

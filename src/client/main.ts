@@ -29,9 +29,12 @@ else $('howto').textContent += ' Move with WASD or the arrow keys. Space drops w
 
 async function showMenuBoard() {
   if (!BOARD) return;
+  const note = $('menunote');
+  $('menuboard').hidden = false;
   const top = await fetchBoard(dailySeed());
-  if (!top) return;
-  $('menuboard').hidden = false; $('menuempty').hidden = top.length > 0;
+  if (!top) { note.textContent = "Could not load today's board. Your run will still be posted when you finish."; return; }
+  note.hidden = top.length > 0;
+  note.textContent = "Nobody has finished today's shaadi yet. Be the first.";
   renderBoard($('menulist'), top, null, 5);
 }
 showMenuBoard();
@@ -61,6 +64,7 @@ const keys = new Set<string>();
 let drag: (Joy & { id: number; ox: number; oy: number }) | null = null, dropQueued = false;
 addEventListener('keydown', e => {
   if (e.target instanceof HTMLInputElement) return;
+  if (e.target instanceof HTMLButtonElement && (e.code === 'Enter' || e.code === 'Space')) return; // the button handles its own press
   keys.add(e.code);
   if (e.code === 'Space') { dropQueued = true; e.preventDefault(); }
   if (e.code === 'Enter' && room?.state && room.state.phase !== 'run') room.start();
@@ -114,7 +118,6 @@ async function postRun(r: LocalRoom, runSeed: string) {
   if ('error' in res) { note.textContent = `Not posted. ${res.error}`; return; }
   note.textContent = `You are #${res.rank} today with ${res.score}.`;
   renderBoard(list, res.top, me, 20);
-  list.querySelectorAll('li').forEach((li, i) => { li.style.animationDelay = `${Math.min(i, 8) * 50}ms`; });
   list.querySelector('.me')?.scrollIntoView({ block: 'nearest' });
 }
 
@@ -137,10 +140,14 @@ function frame(ms: number) {
       $('copy').textContent = 'Copy link to this shaadi'; $<HTMLInputElement>('link').hidden = true;
       $('endboard').hidden = true;
       if (BOARD && room instanceof LocalRoom && s.seed === dailySeed()) postRun(room, s.seed);
+      endCard.hidden = false; $('again').focus({ preventScroll: true }); // keyboard and screen-reader users land on the next action
     }
     if (s.phase !== 'over') shownResult = '';
     endCard.hidden = s.phase !== 'over';
-  } else { g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#15493e'; g.fillRect(0, 0, canvas.width, canvas.height); startBtn.hidden = true; dropBtn.hidden = true; }
+  } else {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#15493e'; g.fillRect(0, 0, canvas.width, canvas.height); startBtn.hidden = true; dropBtn.hidden = true;
+    if (room) { g.fillStyle = '#fff3d6'; g.font = `600 ${18 * view.dpr}px Mukta, system-ui, sans-serif`; g.textAlign = 'center'; g.fillText('Joining the room…', canvas.width / 2, canvas.height / 2); }
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
