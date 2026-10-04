@@ -81,7 +81,7 @@ $('copy').onclick = async () => {
 };
 // The verdict as a picture. Offered only where the page can hand over a file (the site, not the sandboxed solo build).
 const shareBtn = $('share'); shareBtn.hidden = !BOARD;
-shareBtn.onclick = async () => {
+if (BOARD) shareBtn.onclick = async () => {
   const r = room?.state?.result, s = room?.state; if (!r || !s) return;
   shareBtn.textContent = 'Making the picture…';
   const out = await shareVerdict({ won: r.won, title: $('verdict').textContent ?? '', headline: r.headline, score: `Score ${r.score.toLocaleString('en-IN')}  ·  ${s.served} served` });
