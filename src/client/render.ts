@@ -64,7 +64,7 @@ function person(g: CanvasRenderingContext2D, x: number, y: number, body: string,
   if (kind === 'player') { g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(-6, 0, 12, 12); }
   g.fillStyle = C.skin; g.beginPath(); g.arc(0, -15, 9, 0, 7); g.fill();
   g.fillStyle = C.ink;
-  if (kind === 'fufaji') { g.fillRect(-9, -24, 18, 5); g.beginPath(); g.ellipse(-4, -11, 5, 2.2, 0.3, 0, 7); g.ellipse(4, -11, 5, 2.2, -0.3, 0, 7); g.fill(); }
+  if (kind === 'fufaji') { g.fillStyle = '#6b7783'; rr(g, -12, -3, 24, 7, 3); g.fill(); g.fillStyle = C.ink; g.fillRect(-9, -24, 18, 5); g.beginPath(); g.ellipse(-4, -11, 5, 2.2, 0.3, 0, 7); g.ellipse(4, -11, 5, 2.2, -0.3, 0, 7); g.fill(); }
   else if (kind === 'bua') { g.beginPath(); g.arc(0, -19, 9, Math.PI, 0); g.fill(); g.beginPath(); g.arc(0, -27, 5, 0, 7); g.fill(); g.fillStyle = C.danger; g.beginPath(); g.arc(0, -17, 1.6, 0, 7); g.fill(); }
   else if (kind === 'dadi') { g.fillStyle = '#eeeeee'; g.beginPath(); g.arc(0, -19, 9, Math.PI, 0); g.fill(); g.beginPath(); g.arc(0, -26, 4, 0, 7); g.fill(); g.strokeStyle = C.ink; g.lineWidth = 1.2; g.strokeRect(-6, -17, 5, 3.5); g.strokeRect(1, -17, 5, 3.5); }
   else if (kind === 'pandit') { g.fillStyle = C.danger; g.fillRect(-1, -22, 2, 6); g.fillStyle = '#fff'; g.fillRect(-6, -8, 12, 2); }
@@ -154,6 +154,20 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
         g.strokeStyle = pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.alarm; g.lineWidth = 4;
         g.beginPath(); g.arc(bx + shake, by, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pc); g.stroke();
         drawItem(g, q.want, bx + shake, by + 1);
+        // each relative shows what they will do before they do it
+        const chip = (label: string) => { g.font = `800 12px ${BODY}`; const w = g.measureText(label).width + 12; g.fillStyle = C.danger; rr(g, bx - w / 2, by - 40, w, 17, 8); g.fill(); text(g, label, bx, by - 31, `800 12px ${BODY}`, '#fff'); }; // sits above the bubble, clear of the face
+        if (q.kind === 'fufaji') chip('-30');
+        else if (q.kind === 'pandit') chip('-20 sec');
+        else if (q.kind === 'bua' && pc < 0.4) { // her gossip reaches everyone inside this ring
+          chip('tells all');
+          g.strokeStyle = C.alarm; g.lineWidth = 2; g.globalAlpha = 0.5; g.setLineDash([6, 8]); g.beginPath(); g.arc(p.x, p.y, 190, 0, 7); g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+        }
+        if (pc < 0.3) { // losing it: anger marks over the head
+          const beat = calm.matches ? 1 : 0.8 + 0.2 * Math.abs(Math.sin(now * 6));
+          g.strokeStyle = C.alarm; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath();
+          for (const a of [-2.2, -1.57, -0.94]) { g.moveTo(p.x - 16 + Math.cos(a) * 7, p.y - 30 + Math.sin(a) * 7); g.lineTo(p.x - 16 + Math.cos(a) * 13 * beat, p.y - 30 + Math.sin(a) * 13 * beat); }
+          g.stroke(); g.lineCap = 'butt';
+        }
       } else if (q.state === 'leaving') text(g, q.happy ? 'shukriya!' : 'hmph!', p.x, p.y - 36, `800 13px ${BODY}`, q.happy ? C.good : C.alarm);
     } });
   }

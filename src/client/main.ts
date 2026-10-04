@@ -3,6 +3,7 @@ import { draw, type View } from './render';
 import { LocalRoom, RemoteRoom, type Room } from './net';
 import { boardName, fetchBoard, guestName, postScore, renderBoard } from './board';
 import { mountDevBar } from './fixtures';
+import { shareVerdict } from './share';
 
 declare const SOLO_ONLY: boolean; // no room server behind this build
 declare const BOARD: boolean;     // a leaderboard API is served next to this build
@@ -77,6 +78,14 @@ $('copy').onclick = async () => {
   const link = `${location.origin}${location.pathname}#s-${room?.state?.seed ?? seed}`;
   const out = $<HTMLInputElement>('link'); out.value = link;
   try { await navigator.clipboard.writeText(link); $('copy').textContent = 'Copied'; } catch { out.hidden = false; out.select(); }
+};
+// The verdict as a picture. Offered only where the page can hand over a file (the site, not the sandboxed solo build).
+const shareBtn = $('share'); shareBtn.hidden = !BOARD;
+shareBtn.onclick = async () => {
+  const r = room?.state?.result, s = room?.state; if (!r || !s) return;
+  shareBtn.textContent = 'Making the picture…';
+  const out = await shareVerdict({ won: r.won, title: $('verdict').textContent ?? '', headline: r.headline, score: `Score ${r.score.toLocaleString('en-IN')}  ·  ${s.served} served` });
+  shareBtn.textContent = out === 'shared' ? 'Shared' : out === 'saved' ? 'Picture saved' : out === 'failed' ? 'Could not make the picture. Try again' : 'Share this verdict';
 };
 // A phone call, a notification or another tab should not cost the player the shaadi.
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
@@ -172,7 +181,7 @@ function frame(ms: number) {
       $('headline').textContent = s.result.headline;
       $('tip').textContent = s.result.tip; $('tip').hidden = !s.result.tip;
       $('score').textContent = `Score ${s.result.score.toLocaleString('en-IN')}  ·  ${s.served} served`;
-      $('copy').textContent = 'Copy link'; $<HTMLInputElement>('link').hidden = true;
+      $('copy').textContent = 'Copy link'; $<HTMLInputElement>('link').hidden = true; shareBtn.textContent = 'Share this verdict';
       $('endboard').hidden = true;
       const r = solo();
       if (BOARD && r && s.seed === dailySeed()) postRun(r, s.seed, s.served, s.result.score);

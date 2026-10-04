@@ -38,7 +38,9 @@ Open the page, create a room, and share the 5-character code (or the `#r-CODE` l
 | Ghodi bhaag gayi | Horse knocks items out of hands and rattles guests | Stay close to her to catch her |
 | Paneer khatam | Halwai has no paneer for 18s | Wait it out |
 
-The end screen writes the run's story from what actually happened ("Fufaji went naraz waiting for chai during the power cut").
+The end screen writes the run's story from what actually happened ("Fufaji went naraz waiting for chai during the power cut"). "Share this verdict" turns it into a picture for a group chat.
+
+Relatives show what they will do before they do it: Fufaji carries a -30 tag, Pandit ji a -20 sec tag, Bua ji draws the ring her gossip will reach, and anyone about to go naraz gets anger marks.
 
 ## Dev build and worst-case data
 
