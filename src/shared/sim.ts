@@ -8,9 +8,9 @@ export type Kind = 'fufaji' | 'bua' | 'mama' | 'dadi' | 'pandit' | 'baraati';
 export type DKind = 'bijli' | 'baarish' | 'ghodi' | 'paneer';
 
 export const STATIONS: { item: Item; x: number; y: number; label: string }[] = [
-  { item: 'chai', x: 150, y: 110, label: 'Chai' },
-  { item: 'paneer', x: 480, y: 100, label: 'Halwai' },
-  { item: 'mithai', x: 790, y: 110, label: 'Mithai' },
+  { item: 'chai', x: 150, y: 138, label: 'Chai' },
+  { item: 'paneer', x: 480, y: 138, label: 'Paneer' },
+  { item: 'mithai', x: 790, y: 138, label: 'Mithai' },
   { item: 'chair', x: 120, y: 520, label: 'Chairs' },
 ];
 export const GEN = { x: 852, y: 520 }, GATE = { x: 40, y: 330 }, MANDAP = { x: 840, y: 300 };
@@ -32,18 +32,47 @@ export interface Guest {
   state: 'arriving' | 'content' | 'waiting' | 'leaving'; want: Item | null; patience: number; timer: number; n: number; happy: boolean;
 }
 export interface Disaster { kind: DKind; until: number; progress: number }
-export interface Incident { t: number; text: string; weight: number }
+export interface Incident { t: number; text: string; weight: number; who: Kind }
 export interface Mover { x: number; y: number; vx: number; vy: number; turn: number; tick: number }
 export interface State {
   seed: string; phase: 'lobby' | 'run' | 'over'; t: number; izzat: number; served: number; muhurat: number;
   players: Player[]; guests: Guest[]; disasters: Disaster[]; horse: Mover | null; chintu: Mover | null;
   incidents: Incident[]; toasts: { text: string; t: number }[];
-  result: null | { won: boolean; headline: string; score: number };
+  result: null | { won: boolean; headline: string; score: number; tip: string };
 }
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 export const clock = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+/** Trim a typed name to at most `max` UTF-16 units without cutting an emoji or a combined character in half. */
+export function clipName(raw: string, max = 12): string {
+  const clean = raw.replace(/\s+/g, ' ').trim();
+  const parts = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? Array.from(new Intl.Segmenter().segment(clean), x => x.segment) : Array.from(clean);
+  let out = '';
+  for (const part of parts) { if (out.length + part.length > max) break; out += part; }
+  return out.trim();
+}
+/** What each relative is like, said once when they arrive so nobody learns it from a penalty. */
+export const ARRIVALS: Record<Kind, string> = {
+  fufaji: 'Fufaji is here. Impatient: costs 30 izzat if ignored',
+  bua: 'Bua ji is here. If she goes naraz, she tells everyone nearby',
+  mama: 'Mamaji is here. He wanders and keeps wanting paneer',
+  dadi: 'Dadi is here. Bring her a chair first',
+  pandit: 'Pandit ji is here. Upset him and the muhurat comes early',
+  baraati: '',
+};
+const TIPS: Record<Kind, string> = {
+  fufaji: 'Next time, serve Fufaji first. He loses patience fastest and costs 30 izzat.',
+  bua: "Next time, serve Bua ji before the guests around her. Her anger spreads.",
+  mama: 'Next time, take paneer to Mamaji early. He asks again within seconds.',
+  dadi: 'Next time, fetch Dadi a chair from the far corner as soon as she sits.',
+  pandit: 'Next time, keep Pandit ji fed. When he goes naraz the muhurat moves 20 seconds earlier.',
+  baraati: 'Next time, watch the rings and serve whoever is closest to red.',
+};
+/** Solo players get this long (or until their first serve) before anyone loses patience. */
+export const GRACE_SECONDS = 25;
+const spawnX = (i: number) => 480 + (i - 2.5) * 78, SPAWN_Y = 452;
 
 export function dailySeed(d = new Date()): string { return 'daily-' + d.toISOString().slice(0, 10); }
 
@@ -67,7 +96,7 @@ export class Sim {
     const used = new Set(this.s.players.map(p => p.color));
     let color = 0; while (used.has(color)) color++;
     const i = this.s.players.length;
-    this.s.players.push({ id, name: name.slice(0, 12) || 'Guest', x: 400 + i * 40, y: 525, dx: 0, dy: 0, drop: false, carry: null, cd: 0, color });
+    this.s.players.push({ id, name: clipName(name) || 'Guest', x: spawnX(i), y: SPAWN_Y, dx: 0, dy: 0, drop: false, carry: null, cd: 0, color });
     return true;
   }
   removePlayer(id: string) { this.s.players = this.s.players.filter(p => p.id !== id); }
@@ -81,7 +110,7 @@ export class Sim {
   start(seed?: string) {
     const players = this.s.players;
     this.s = this.fresh(seed || this.s.seed);
-    players.forEach((p, i) => { p.carry = null; p.cd = 0; p.x = 400 + i * 40; p.y = 525; });
+    players.forEach((p, i) => { p.carry = null; p.cd = 0; p.x = spawnX(i); p.y = SPAWN_Y; });
     this.s.players = players; this.s.phase = 'run';
     const r = mulberry32(hashSeed(this.s.seed));
     this.rr = mulberry32(hashSeed(this.s.seed + '#run'));
@@ -132,7 +161,7 @@ export class Sim {
       const kind = this.arrivals[0].kind;
       const spot = kind === 'pandit' ? PANDIT_SPOT : this.freeSpot();
       if (spot < 0) break;
-      this.arrivals.shift(); this.addGuest(kind, spot); this.toast(`${NAMES[kind]} has arrived`);
+      this.arrivals.shift(); this.addGuest(kind, spot); this.toast(ARRIVALS[kind]);
     }
     if (!s.chintu && s.t >= this.chintuAt) { s.chintu = { x: GATE.x, y: GATE.y, vx: 0, vy: 0, turn: 0, tick: 0 }; this.toast('Chintu is here. Guard the mithai'); }
     const cap = Math.min(12, 3 + 2 * s.players.length);
@@ -168,6 +197,7 @@ export class Sim {
         if (g.timer <= 0) { g.want = this.pickWant(g); g.patience = 1; g.state = 'waiting'; }
       } else if (g.state === 'waiting') {
         const trait = g.kind === 'fufaji' ? 1.7 : g.kind === 'dadi' ? 0.6 : 1;
+        if (s.served === 0 && s.t < GRACE_SECONDS) continue; // nobody loses patience before the crew has had a chance to learn the loop
         g.patience -= dt / (21 * crew) * trait * drainMul * (1 + 0.5 * s.t / RUN_SECONDS);
         if (g.patience <= 0) this.naraz(g);
       }
@@ -182,7 +212,7 @@ export class Sim {
     let text = `${g.name} went naraz waiting for ${ITEM_NAMES[g.want!]}`;
     if (ctx.length) text += ' ' + ctx.join(' and ');
     s.izzat -= penalty;
-    s.incidents.push({ t: s.t, text, weight: penalty * (1 + ctx.length) });
+    s.incidents.push({ t: s.t, text, weight: penalty * (1 + ctx.length), who: g.kind });
     this.toast(`${g.name} naraz ho gaye! Izzat -${penalty}`);
     if (g.kind === 'pandit') { s.muhurat = Math.max(s.t + 5, s.muhurat - 20); this.toast('Pandit ji moved the muhurat 20s earlier'); }
     if (g.kind === 'bua') {
@@ -272,7 +302,7 @@ export class Sim {
     if (won) {
       const worst = inc.slice().sort((a, b) => b.weight - a.weight)[0];
       headline = `Shaadi saved with ${s.izzat} izzat. ` + (worst ? `Closest call: ${worst.text}.` : 'Not one relative went naraz.');
-    } else headline = `Izzat ran out at ${clock(s.t)}. ${inc[inc.length - 1].text}.`;
-    s.result = { won, headline, score: s.served * 10 + (won ? s.izzat * 5 : 0) };
+    } else headline = `Izzat ran out with ${clock(Math.max(0, s.muhurat - s.t))} to go. ${inc[inc.length - 1].text}.`;
+    s.result = { won, headline, score: s.served * 10 + (won ? s.izzat * 5 : 0), tip: won ? '' : TIPS[inc[inc.length - 1].who] };
   }
 }

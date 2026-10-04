@@ -17,6 +17,8 @@ Open the page, create a room, and share the 5-character code (or the `#r-CODE` l
 ## How it plays
 
 - Walk into a stall to pick up, walk into a guest to serve. Space (or Drop) discards what you hold.
+- Until your first serve, a dotted line and a caption show what to walk into, and nobody loses patience for the first 25 seconds.
+- Solo runs pause with Esc, P or the Pause button, and pause themselves when the tab is hidden.
 - Each run is 5 minutes. Izzat starts at 100; a guest who waits too long goes naraz and costs izzat. At 0 the run ends.
 - The seed fixes who arrives when and which disasters hit. `#s-<seed>` links replay a specific shaadi; with no seed, everyone gets today's.
 
@@ -38,9 +40,13 @@ Open the page, create a room, and share the 5-character code (or the `#r-CODE` l
 
 The end screen writes the run's story from what actually happened ("Fufaji went naraz waiting for chai during the power cut").
 
+## Dev build and worst-case data
+
+`npm start` serves a dev build. Add `?data=worst` (or `demo`, `empty`, `one`, `many`, `error`) to swap the leaderboard for a fixture; a small bar at the bottom switches between them. The fixtures and the bar are stripped from the Netlify and solo builds.
+
 ## Daily leaderboard
 
-Solo runs of today's shaadi post to a daily board (`/api/board`, `/api/score`), stored in Netlify Blobs. The client sends its seed and input log; the function replays the run with the same sim and scores it itself, so a score cannot be typed in. A scripted run that plays well is still a valid run. Room runs do not post yet.
+Solo runs of today's shaadi post to a daily board (`/api/board`, `/api/score`), stored in Netlify Blobs. The client sends its seed and input log; the function replays the run with the same sim and scores it itself, so a score cannot be typed in. A scripted run that plays well is still a valid run. A run with nobody served is not posted. Room runs do not post yet.
 
 ## Layout
 

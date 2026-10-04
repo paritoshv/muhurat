@@ -85,6 +85,8 @@ export async function handle(req: Request, s: KV, ip: string, now = Date.now()):
 
   const end = replay(body.seed, body.log)
   if (end.phase !== 'over' || !end.result) return json({ error: 'That run did not finish.' }, 400)
+  // An abandoned tab is not a run. Nothing reaches the board until someone has been served.
+  if (end.served === 0) return json({ error: 'Serve at least one guest to get on the board.' }, 422)
 
   const entry: Entry = { name: name.name, score: end.result.score, won: end.result.won, served: end.served, izzat: end.izzat, at: now }
   const { rank, top } = await insert(s, body.seed, entry)

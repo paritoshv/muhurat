@@ -13,6 +13,8 @@ export class LocalRoom implements Room {
   myId = 'me'; code = null; error = null; state: State | null;
   /** Inputs of the current run, tick by tick. The leaderboard replays this. */
   log: InputLog = [];
+  /** Solo runs can stop the clock. No tick runs while paused, so the input log and the replay are unaffected. */
+  paused = false;
   private sim: Sim; private timer: number; private tick = 0; private last = '';
   private pending = { dx: 0, dy: 0, drop: false };
   constructor(seed: string, name: string) {
@@ -20,6 +22,7 @@ export class LocalRoom implements Room {
     this.timer = window.setInterval(() => this.step(), 1000 * TICK);
   }
   private step() {
+    if (this.paused) return;
     const p = this.pending;
     if (this.sim.s.phase === 'run') {
       const sig = `${p.dx},${p.dy}`;
@@ -33,7 +36,7 @@ export class LocalRoom implements Room {
     this.sim.step(TICK); this.state = this.sim.s;
   }
   input(dx: number, dy: number, drop: boolean) { this.pending.dx = quant(dx); this.pending.dy = quant(dy); if (drop) this.pending.drop = true; }
-  start(seed?: string) { this.sim.start(seed); this.state = this.sim.s; this.tick = 0; this.log = []; this.last = ''; }
+  start(seed?: string) { this.sim.start(seed); this.state = this.sim.s; this.tick = 0; this.log = []; this.last = ''; this.paused = false; }
   close() { clearInterval(this.timer); }
 }
 

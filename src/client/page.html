@@ -4,7 +4,7 @@
 /* Layout: one screen. The wedding lawn fills the frame; menus sit over it like an invitation card. */
 :root {
   --night: #0b1f1c; --lawn: #15493e; --marigold: #f6a821; --rani: #c9256a; --cream: #fff3d6; --ink: #0a1614; --ink-soft: #5a4720; --danger: #c93426; --alarm: #ff8f80; --good: #58c777;
-  --ink-hover: #1c2d29; --rani-hover: #b01f5c; --marigold-hover: #ffb93d;
+  --ink-hover: #1c2d29; --rani-hover: #b01f5c; --marigold-hover: #ffb93d; --quiet-hover: rgba(10, 22, 20, 0.08);
   --display: "Yatra One", "Trebuchet MS", sans-serif; --body: Mukta, "Segoe UI", system-ui, sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --t-press: 160ms; --t-card: 250ms; --t-row: 240ms;
   color-scheme: dark;
@@ -14,39 +14,44 @@ html { -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%;
 html, body { height: 100%; margin: 0; }
 body { background: var(--night); color: var(--cream); font-family: var(--body); font-size: 16px; overflow: hidden; }
 ::selection { background: var(--marigold); color: var(--ink); }
-#stage { position: relative; height: 100%; }
+#stage { position: relative; height: 100%; touch-action: none; }
 .fit { position: absolute; inset: 8px 16px; display: flex; align-items: center; justify-content: center; }
 canvas { display: block; border-radius: 12px; background: var(--lawn); touch-action: none; user-select: none; -webkit-user-select: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* The invitation card: a double frame in marigold and rani, no shadow. */
 .card { position: absolute; z-index: 2; left: 50%; top: 50%; translate: -50% -50%; width: min(420px, calc(100% - 32px)); max-height: calc(100% - 24px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; background: var(--cream); color: var(--ink); border: 3px solid var(--marigold); outline: 3px solid var(--rani); outline-offset: 3px; border-radius: 12px; padding: 24px 20px 20px; display: flex; flex-direction: column; gap: 16px; text-align: center; animation: card-in var(--t-card) var(--ease-out); }
 @keyframes card-in { from { opacity: 0; transform: scale(0.96); } }
 h1 { font-family: var(--display); font-weight: 400; font-size: 56px; line-height: 1; margin: 0; color: var(--rani); }
 h2 { font-family: var(--display); font-weight: 400; font-size: 34px; line-height: 1.05; margin: 0; color: var(--rani); text-wrap: balance; }
-.sub { font-family: var(--body); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin: 0; line-height: 1.4; color: var(--ink-soft); }
-#end[data-won="false"] h2 { color: var(--danger); }
-p { margin: 0; line-height: 1.4; text-wrap: pretty; }
+h2.sub { font-family: var(--body); font-size: 14px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.4; color: var(--ink-soft); }
+#end[data-won="false"] #verdict { color: var(--danger); }
+p { margin: 0; line-height: 1.4; text-wrap: pretty; overflow-wrap: anywhere; }
 .small { font-size: 14px; color: var(--ink-soft); }
 .group { display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
-.row > * { flex: 1 1 120px; min-width: 0; }
+.row > * { flex: 1 1 96px; min-width: 0; }
 label { font-size: 14px; font-weight: 800; text-align: left; color: var(--ink-soft); }
+label span { font-weight: 400; }
 input { font: inherit; font-size: 16px; min-height: 48px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; color: var(--ink); caret-color: var(--rani); box-sizing: border-box; width: 100%; color-scheme: light; }
 input::placeholder { color: #6b5a36; }
 #code { text-transform: uppercase; letter-spacing: 0.2em; font-weight: 800; text-align: center; }
-button { font: inherit; font-weight: 800; min-height: 48px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--ink); color: var(--cream); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform var(--t-press) var(--ease-out), background-color var(--t-press) ease; }
+button { font: inherit; font-weight: 800; min-height: 48px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--ink); color: var(--cream); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap; transition: transform var(--t-press) var(--ease-out), background-color var(--t-press) ease; }
 button.main { background: var(--rani); color: #fff; font-size: 18px; min-height: 52px; }
+button.quiet { background: transparent; color: var(--ink); border: 2px solid var(--ink); font-size: 15px; padding: 0 8px; }
 button:active { transform: scale(0.97); }
-@media (hover: hover) and (pointer: fine) { button:hover { background: var(--ink-hover); } button.main:hover { background: var(--rani-hover); } #start:hover { background: var(--marigold-hover); } }
+@media (hover: hover) and (pointer: fine) { button:hover { background: var(--ink-hover); } button.main:hover { background: var(--rani-hover); } button.quiet:hover { background: var(--quiet-hover); } #start:hover { background: var(--marigold-hover); } }
 button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); outline-offset: 2px; }
 #msg { color: var(--danger); font-weight: 800; }
 #headline { font-size: 18px; font-weight: 600; }
+#tip { font-size: 15px; padding: 10px 12px; border-radius: 8px; background: rgba(246, 168, 33, 0.28); text-align: left; }
 
 /* Leaderboard rows */
-.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 190px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--marigold) transparent; font-variant-numeric: tabular-nums; text-align: left; }
-.board li { display: grid; grid-template-columns: 2em 1fr auto; gap: 8px; padding: 6px 10px; border-radius: 6px; animation: row-in var(--t-row) var(--ease-out) backwards; }
+.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; text-align: left; }
+.board li { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; gap: 8px; padding: 6px 10px; border-radius: 6px; animation: row-in var(--t-row) var(--ease-out) backwards; }
 .board li:nth-child(odd) { background: rgba(10, 22, 20, 0.06); }
 .board li.me { background: var(--marigold); font-weight: 800; }
+.board li.gap { display: block; padding: 0; text-align: center; background: none; color: var(--ink-soft); line-height: 1; }
 .board .rank { color: var(--ink-soft); } .board li.me .rank { color: var(--ink); }
 .board .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: 0.04em; }
 .board .pts { font-weight: 800; }
@@ -56,9 +61,15 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
 
 .float { position: absolute; z-index: 1; bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
 #start { left: 50%; translate: -50% 0; background: var(--marigold); color: var(--ink); font-size: 20px; min-height: 56px; padding: 0 28px; }
-#drop { right: max(24px, env(safe-area-inset-right, 0px)); min-width: 72px; min-height: 56px; background: rgba(10, 22, 20, 0.85); border: 2px solid var(--cream); }
+#drop { right: max(24px, env(safe-area-inset-right, 0px)); min-width: 84px; min-height: 56px; background: var(--marigold); color: var(--ink); font-size: 18px; }
+#pause { left: max(24px, env(safe-area-inset-left, 0px)); min-height: 48px; background: rgba(10, 22, 20, 0.85); border: 2px solid var(--cream); }
+/* The thumb stick is drawn where the drag began. Only the knob moves, by transform. */
+#stick { position: absolute; z-index: 1; width: 88px; height: 88px; margin: -44px 0 0 -44px; border: 2px solid rgba(255, 243, 214, 0.5); border-radius: 50%; pointer-events: none; }
+#stick i { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%; background: rgba(255, 243, 214, 0.8); }
 
 @media (max-width: 600px) { .fit { inset: 6px 8px; } h1 { font-size: 46px; } .card { padding: 20px 16px 16px; gap: 12px; } }
+/* On a phone held upright the lawn sits at the top, leaving the bottom of the screen for the thumb. */
+@media (max-width: 600px) and (orientation: portrait) { .fit { align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) {
   @keyframes card-in { from { opacity: 0; } }
   @keyframes row-in { from { opacity: 0; } }
@@ -67,6 +78,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
 </style>
 <div id="stage">
   <div class="fit"><canvas id="lawn" role="img" aria-label="The wedding lawn, where the game is played"></canvas></div>
+  <div id="live" class="sr" aria-live="polite"></div>
   <div id="menu" class="card">
     <h1>Muhurat</h1>
     <div class="group">
@@ -74,15 +86,17 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
       <p class="small" id="howto">Walk into a stall to pick up, then into a guest to serve.</p>
     </div>
     <div class="group">
-      <label for="name">Your name</label>
+      <label for="name">Your name <span>(optional)</span></label>
       <input id="name" maxlength="12" placeholder="e.g. Chintu" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done">
       <button id="solo" class="main">Play today's shaadi</button>
       <p id="seedline" class="small"></p>
     </div>
-    <div id="rooms" class="row">
+    <div id="rooms" class="group">
       <button id="create">Create a room</button>
-      <input id="code" maxlength="5" placeholder="CODE" aria-label="Room code" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
-      <button id="join">Join room</button>
+      <div class="row">
+        <input id="code" maxlength="5" placeholder="CODE" aria-label="Room code" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
+        <button id="join">Join room</button>
+      </div>
     </div>
     <div id="menuboard" class="group" hidden>
       <h2 class="sub">Today's board</h2>
@@ -95,6 +109,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
     <div class="group">
       <h2 id="verdict"></h2>
       <p id="headline"></p>
+      <p id="tip" hidden></p>
       <p id="score" class="small"></p>
     </div>
     <div id="endboard" class="group" hidden>
@@ -103,14 +118,27 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--marigold); 
       <ol id="endlist" class="board"></ol>
     </div>
     <div class="group">
+      <button id="again" class="main">Play it again</button>
       <div class="row">
-        <button id="again" class="main">Play it again</button>
-        <button id="fresh">Try a new shaadi</button>
+        <button id="fresh" class="quiet">New shaadi</button>
+        <button id="copy" class="quiet">Copy link</button>
+        <button id="tomenu" class="quiet">Menu</button>
       </div>
-      <button id="copy">Copy link to this shaadi</button>
       <input id="link" readonly hidden aria-label="Link to this shaadi">
     </div>
   </div>
+  <div id="paused" class="card" role="dialog" aria-labelledby="pausedtitle" hidden>
+    <div class="group">
+      <h2 id="pausedtitle">Paused</h2>
+      <p>The shaadi waits. The relatives will not.</p>
+    </div>
+    <div class="group">
+      <button id="resume" class="main">Resume</button>
+      <button id="quit" class="quiet">Leave this shaadi</button>
+    </div>
+  </div>
+  <div id="stick" hidden><i></i></div>
   <button id="start" class="float" hidden>Start the shaadi</button>
+  <button id="pause" class="float" hidden>Pause</button>
   <button id="drop" class="float" hidden>Drop</button>
 </div>

@@ -11,7 +11,8 @@ const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const easeOut = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 5);
 const floats: { x: number; y: number; text: string; t0: number }[] = [];
 const prevGuest = new Map<number, string>(), bannerSeen = new Map<string, number>();
-let lastSimT = 0, petalsAt = -1, petalsKey = '';
+let lastSimT = 0, petalsAt = -1, petalsKey = '', darkA = 0, prevIz = 100, flashAt = -9;
+const KURTA = ['#3f7fd1', '#2f9c8f', '#7a62c9', '#c9662f'], SAFA = ['#c9256a', '#f6a821', '#e8e0c8'];
 export const PLAYER_COLORS = ['#f6a821', '#4cc3ff', '#e0347a', '#8ee06b', '#c59bff', '#ff8a5c'];
 const DISPLAY = '"Yatra One", "Trebuchet MS", sans-serif', BODY = 'Mukta, "Segoe UI", system-ui, sans-serif';
 const BANNERS: Record<DKind, string> = {
@@ -54,7 +55,7 @@ export function drawItem(g: CanvasRenderingContext2D, item: Item, x: number, y: 
 
 const BODY_COL: Record<Kind, string> = { fufaji: '#8d99a6', bua: '#d6457f', mama: '#7b5cc9', dadi: '#f1e3c2', pandit: '#f08a24', baraati: '#3f7fd1' };
 
-function person(g: CanvasRenderingContext2D, x: number, y: number, body: string, kind: Kind | 'player' | 'chintu', now: number, small = false) {
+function person(g: CanvasRenderingContext2D, x: number, y: number, body: string, kind: Kind | 'player' | 'chintu', now: number, small = false, safa: string = C.rani) {
   const k = small ? 0.72 : 1;
   g.save(); g.translate(x, y); g.scale(k, k);
   if (kind === 'mama' && !calm.matches) g.rotate(Math.sin(now * 2.2) * 0.16);
@@ -67,7 +68,7 @@ function person(g: CanvasRenderingContext2D, x: number, y: number, body: string,
   else if (kind === 'bua') { g.beginPath(); g.arc(0, -19, 9, Math.PI, 0); g.fill(); g.beginPath(); g.arc(0, -27, 5, 0, 7); g.fill(); g.fillStyle = C.danger; g.beginPath(); g.arc(0, -17, 1.6, 0, 7); g.fill(); }
   else if (kind === 'dadi') { g.fillStyle = '#eeeeee'; g.beginPath(); g.arc(0, -19, 9, Math.PI, 0); g.fill(); g.beginPath(); g.arc(0, -26, 4, 0, 7); g.fill(); g.strokeStyle = C.ink; g.lineWidth = 1.2; g.strokeRect(-6, -17, 5, 3.5); g.strokeRect(1, -17, 5, 3.5); }
   else if (kind === 'pandit') { g.fillStyle = C.danger; g.fillRect(-1, -22, 2, 6); g.fillStyle = '#fff'; g.fillRect(-6, -8, 12, 2); }
-  else if (kind === 'baraati') { g.fillStyle = C.rani; g.beginPath(); g.arc(0, -18, 10, Math.PI, 0); g.fill(); g.fillRect(6, -19, 3, 9); }
+  else if (kind === 'baraati') { g.fillStyle = safa; g.beginPath(); g.arc(0, -18, 10, Math.PI, 0); g.fill(); g.fillRect(6, -19, 3, 9); }
   else if (kind === 'mama') { g.beginPath(); g.arc(0, -19, 9, Math.PI * 1.1, -0.1); g.fill(); g.fillStyle = '#3fa66b'; g.fillRect(11, -4, 4, 11); }
   else if (kind === 'chintu') { g.fillStyle = C.danger; g.beginPath(); g.arc(0, -18, 9.5, Math.PI, 0); g.fill(); g.fillRect(0, -19, 12, 3); }
   else { g.fillStyle = '#fff'; g.beginPath(); g.moveTo(-9, -19); g.lineTo(0, -28); g.lineTo(9, -19); g.closePath(); g.fill(); }
@@ -90,10 +91,9 @@ let dark: HTMLCanvasElement | null = null;
 
 /** z: CSS px per world unit. vw/vh: how much of the lawn the canvas shows. Small screens show part of it and follow the player. */
 export interface View { z: number; vw: number; vh: number; dpr: number }
-export interface Joy { x: number; y: number; dx: number; dy: number }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: number, code: string | null, view: View, joy: Joy | null) {
+export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: number, code: string | null, view: View, touch: boolean) {
   const dt = Math.min(0.1, now - lastNow || 0.016); lastNow = now;
   if (s.t < lastSimT) { floats.length = 0; prevGuest.clear(); bannerSeen.clear(); petalsAt = -1; } // a new run began
   lastSimT = s.t;
@@ -106,7 +106,10 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   g.fillStyle = C.lawn; g.fillRect(0, 0, W, H);
   g.fillStyle = C.lawn2; for (let y = 0; y < H; y += 60) for (let x = (y / 60) % 2 ? 60 : 0; x < W; x += 120) g.fillRect(x, y, 60, 60);
   // carpet from gate to mandap
-  g.fillStyle = 'rgba(224,52,122,.22)'; g.fillRect(GATE.x, 318, MANDAP.x - GATE.x, 24);
+  g.fillStyle = 'rgba(201,37,106,.5)'; g.fillRect(GATE.x, 316, MANDAP.x - 60 - GATE.x, 28);
+  g.fillStyle = C.marigold; g.fillRect(GATE.x, 316, MANDAP.x - 60 - GATE.x, 2); g.fillRect(GATE.x, 342, MANDAP.x - 60 - GATE.x, 2);
+  // shamiana valance: a scalloped tent edge in rani and marigold along the top of the lawn
+  for (let i = 0; i * 48 < W + 48; i++) { g.fillStyle = i % 2 ? C.marigold : C.rani; g.beginPath(); g.arc(i * 48, 42, 26, 0, Math.PI); g.fill(); }
   for (const sp of SPOTS.slice(0, 12)) { g.fillStyle = 'rgba(255,243,214,.08)'; g.beginPath(); g.ellipse(sp.x, sp.y + 14, 20, 7, 0, 0, 7); g.fill(); }
   // gate
   g.strokeStyle = C.marigold; g.lineWidth = 6; g.beginPath(); g.arc(GATE.x - 14, GATE.y, 44, -Math.PI / 2, Math.PI / 2); g.stroke();
@@ -127,23 +130,23 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
     g.globalAlpha = out ? 0.25 : 1;
     for (const dx of [-24, 0, 24]) drawItem(g, st.item, st.x + dx, st.y - 6, 1.25);
     g.globalAlpha = 1;
-    text(g, out ? 'KHATAM' : st.label.toUpperCase(), st.x, st.y + 18, `800 11px ${BODY}`, out ? C.danger : C.ink);
+    text(g, out ? 'KHATAM' : st.label.toUpperCase(), st.x, st.y + 18, `800 12px ${BODY}`, out ? C.danger : C.ink);
   }
   // generator
   g.fillStyle = '#5d6b70'; rr(g, GEN.x - 30, GEN.y - 22, 60, 44, 6); g.fill();
   g.fillStyle = has('bijli') ? C.alarm : C.marigold; g.beginPath(); g.moveTo(GEN.x + 3, GEN.y - 16); g.lineTo(GEN.x - 9, GEN.y + 3); g.lineTo(GEN.x - 1, GEN.y + 3); g.lineTo(GEN.x - 4, GEN.y + 16); g.lineTo(GEN.x + 9, GEN.y - 4); g.lineTo(GEN.x + 1, GEN.y - 4); g.closePath(); g.fill();
-  text(g, 'GENERATOR', GEN.x, GEN.y + 32, `800 10px ${BODY}`, C.cream);
+  text(g, 'GENERATOR', GEN.x, GEN.y + 33, `800 12px ${BODY}`, C.cream);
 
   // people, sorted by depth
   type D = { y: number; f: () => void };
   const list: D[] = [];
   for (const q of s.guests) {
     const p = ease('g' + q.id, q.x, q.y, dt), was = prevGuest.get(q.id);
-    if (was === 'waiting' && (q.state === 'content' || q.happy)) floats.push({ x: q.x, y: q.y - 46, text: q.kind === 'dadi' ? '+4 izzat' : '+1', t0: now });
+    if (was === 'waiting' && (q.state === 'content' || q.happy)) floats.push({ x: q.x, y: q.y - 46, text: q.kind === 'dadi' ? '+4 izzat' : '+1 izzat', t0: now });
     prevGuest.set(q.id, q.state);
     list.push({ y: p.y, f: () => {
-      person(g, p.x, p.y, BODY_COL[q.kind], q.kind, now, q.kind === 'dadi');
-      if (q.kind !== 'baraati') text(g, q.name, p.x, p.y + 27, `800 11px ${BODY}`, C.cream);
+      person(g, p.x, p.y, q.kind === 'baraati' ? KURTA[q.id % KURTA.length] : BODY_COL[q.kind], q.kind, now, q.kind === 'dadi', SAFA[q.id % SAFA.length]);
+      if (q.kind !== 'baraati') text(g, q.name, p.x, p.y + 28, `800 13px ${BODY}`, C.cream);
       if (q.state === 'waiting' && q.want) {
         const bx = p.x + 20, by = p.y - 40, pc = Math.max(0, q.patience);
         const shake = pc < 0.3 && !calm.matches ? Math.sin(now * 40) * 2 : 0;
@@ -151,17 +154,17 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
         g.strokeStyle = pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.alarm; g.lineWidth = 4;
         g.beginPath(); g.arc(bx + shake, by, 18, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pc); g.stroke();
         drawItem(g, q.want, bx + shake, by + 1);
-      } else if (q.state === 'leaving') text(g, q.happy ? 'shukriya!' : 'hmph!', p.x, p.y - 34, `800 12px ${BODY}`, q.happy ? C.good : C.alarm);
+      } else if (q.state === 'leaving') text(g, q.happy ? 'shukriya!' : 'hmph!', p.x, p.y - 36, `800 13px ${BODY}`, q.happy ? C.good : C.alarm);
     } });
   }
-  if (s.chintu) { const p = ease('c', s.chintu.x, s.chintu.y, dt); list.push({ y: p.y, f: () => { person(g, p.x, p.y, '#3fa66b', 'chintu', now, true); text(g, 'Chintu', p.x, p.y + 22, `800 10px ${BODY}`, C.cream); } }); }
+  if (s.chintu) { const p = ease('c', s.chintu.x, s.chintu.y, dt); list.push({ y: p.y, f: () => { person(g, p.x, p.y, '#3fa66b', 'chintu', now, true); text(g, 'Chintu', p.x, p.y + 23, `800 12px ${BODY}`, C.cream); } }); }
   if (s.horse) { const h = s.horse, p = ease('h', h.x, h.y, dt); list.push({ y: p.y, f: () => horse(g, p.x, p.y, h.vx < 0, now) }); }
   for (const q of s.players) {
     const p = ease('p' + q.id, q.x, q.y, dt), col = PLAYER_COLORS[q.color % PLAYER_COLORS.length];
     list.push({ y: p.y, f: () => {
       if (q.id === myId) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.ellipse(p.x, p.y + 15, 18, 7, 0, 0, 7); g.stroke(); }
       person(g, p.x, p.y, col, 'player', now);
-      text(g, q.name, p.x, p.y + 29, `800 12px ${BODY}`, C.cream);
+      text(g, q.name, p.x, p.y + 30, `800 13px ${BODY}`, C.cream);
       if (q.carry) drawItem(g, q.carry, p.x, p.y - 38, 1.4);
     } });
   }
@@ -169,15 +172,35 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
 
   // serve feedback: a small number lifts off the guest and fades (600ms)
   for (let i = floats.length - 1; i >= 0; i--) {
-    const f = floats[i], pr = (now - f.t0) / 0.6;
+    const f = floats[i], pr = (now - f.t0) / 0.8;
     if (pr >= 1) { floats.splice(i, 1); continue; }
     g.globalAlpha = 1 - pr * pr;
-    const fy = f.y - (calm.matches ? 0 : 16 * easeOut(pr));
-    g.lineWidth = 3; g.strokeStyle = C.ink; g.font = `800 14px ${BODY}`; g.textAlign = 'center'; g.strokeText(f.text, f.x, fy);
-    text(g, f.text, f.x, fy, `800 14px ${BODY}`, C.good);
+    const fy = f.y - (calm.matches ? 0 : 20 * easeOut(pr));
+    g.lineWidth = 4; g.strokeStyle = C.ink; g.font = `800 16px ${BODY}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.strokeText(f.text, f.x, fy);
+    text(g, f.text, f.x, fy, `800 16px ${BODY}`, C.good);
   }
   g.globalAlpha = 1;
   if (prevGuest.size > 300) prevGuest.clear();
+
+  // first-serve guide: until the first guest is served, a dotted line leads to the next thing to walk into
+  const guiding = s.phase === 'run' && s.served === 0 && !!me;
+  let guideText = '';
+  if (guiding && me) {
+    const waiting = s.guests.filter(q => q.state === 'waiting' && q.want).sort((a, b) => a.patience - b.patience);
+    const match = waiting.find(q => q.want === me.carry), first = waiting[0];
+    let target: { x: number; y: number } | null = null;
+    if (match) { target = match; guideText = `Now walk into ${match.kind === 'baraati' ? 'the guest who wants it' : match.name}`; }
+    else if (me.carry) guideText = touch ? 'Nobody wants that yet. Tap Drop' : 'Nobody wants that yet. Press Space to drop it';
+    else if (first) { const st = STATIONS.find(x => x.item === first.want)!; target = st; guideText = `Walk into the ${st.label.toUpperCase()} stall`; }
+    else guideText = 'Guests are arriving. Watch what they ask for';
+    if (target) {
+      const from = shown.get('p' + me.id) ?? me;
+      g.strokeStyle = C.cream; g.lineWidth = 3; g.setLineDash([2, 12]); g.lineCap = 'round'; g.lineDashOffset = calm.matches ? 0 : -now * 28;
+      g.beginPath(); g.moveTo(from.x, from.y + 6); g.lineTo(target.x, target.y + 6); g.stroke(); g.setLineDash([]); g.lineCap = 'butt';
+      const pulse = calm.matches ? 0.5 : 0.5 + 0.5 * Math.sin(now * 5);
+      g.globalAlpha = 0.5 + 0.5 * pulse; g.lineWidth = 3; g.beginPath(); g.arc(target.x, target.y, 44 + pulse * 5, 0, 7); g.stroke(); g.globalAlpha = 1;
+    }
+  }
 
   // rain
   if (has('baarish')) {
@@ -187,7 +210,8 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
     g.stroke();
   }
   // power cut: darkness with pools of light around the crew
-  if (has('bijli')) {
+  darkA += ((has('bijli') ? 1 : 0) - darkA) * Math.min(1, dt * (has('bijli') ? 10 : 15)); // lights die in ~300ms and return faster
+  if (darkA > 0.02) {
     if (!dark) { dark = document.createElement('canvas'); dark.width = W; dark.height = H; } // allocated once, not per frame
     const d = dark.getContext('2d')!;
     d.globalCompositeOperation = 'source-over'; d.fillStyle = 'rgba(2,7,9,.93)'; d.fillRect(0, 0, W, H);
@@ -195,8 +219,8 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
     const hole = (x: number, y: number, r: number) => { const gr = d.createRadialGradient(x, y, r * 0.25, x, y, r); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); d.fillStyle = gr; d.beginPath(); d.arc(x, y, r, 0, 7); d.fill(); };
     for (const q of s.players) { const p = shown.get('p' + q.id) ?? q; hole(p.x, p.y - 8, 125); }
     hole(GEN.x, GEN.y, 60 + Math.sin(now * 6) * 8); hole(MANDAP.x + 12, MANDAP.y, 70);
-    g.drawImage(dark, 0, 0);
-    const prog = s.disasters.find(d2 => d2.kind === 'bijli')!.progress;
+    g.globalAlpha = darkA; g.drawImage(dark, 0, 0); g.globalAlpha = 1;
+    const prog = s.disasters.find(d2 => d2.kind === 'bijli')?.progress ?? 1;
     g.fillStyle = 'rgba(255,255,255,.2)'; rr(g, GEN.x - 30, GEN.y - 36, 60, 7, 3); g.fill();
     g.fillStyle = C.marigold; rr(g, GEN.x - 30, GEN.y - 36, 60 * Math.min(1, prog), 7, 3); g.fill();
   }
@@ -204,7 +228,7 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
 
   // string lights
   for (let i = 0; i <= 24; i++) {
-    const x = i * 40, y = 50 + Math.sin(i * 0.52) * 5;
+    const x = i * 40, y = 76 + Math.sin(i * 0.52) * 5;
     g.fillStyle = has('bijli') ? '#39443f' : [C.marigold, C.rani, '#4cc3ff', C.good][i % 4];
     g.globalAlpha = has('bijli') ? 1 : calm.matches ? 0.9 : 0.65 + 0.35 * Math.sin(now * 3 + i); g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill();
   }
@@ -214,22 +238,28 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   g.setTransform(k, 0, 0, k, 0, 0);
   const VW = view.vw, VH = view.vh, narrow = VW < 700;
   const tone = (pc: number) => pc > 0.55 ? C.good : pc > 0.3 ? C.marigold : C.alarm;
+  const over = s.phase === 'over';
+  if (over) { g.fillStyle = 'rgba(8,20,18,.55)'; g.fillRect(0, 0, VW, VH); } // the lawn steps back so the verdict can be read
 
   // a waiting guest who is off screen gets pinned to the nearest edge
-  const pin = (wx: number, wy: number, col: string, body: (x: number, y: number) => void) => {
+  const pin = (wx: number, wy: number, col: string, body: (x: number, y: number) => void, bg = '#fff') => {
     const sx = wx - camX, sy = wy - camY;
-    if (sx > 0 && sx < VW && sy > 44 && sy < VH) return;
+    if (over || (sx > 0 && sx < VW && sy > 44 && sy < VH)) return;
     const ex = clamp(sx, 26, VW - 26), ey = clamp(sy, 72, VH - 30), a = Math.atan2(sy - ey, sx - ex);
     g.fillStyle = col; g.beginPath();
     g.moveTo(ex + Math.cos(a) * 27, ey + Math.sin(a) * 27); g.lineTo(ex + Math.cos(a + 0.5) * 17, ey + Math.sin(a + 0.5) * 17); g.lineTo(ex + Math.cos(a - 0.5) * 17, ey + Math.sin(a - 0.5) * 17); g.closePath(); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(ex, ey, 15, 0, 7); g.fill();
+    g.fillStyle = bg; g.beginPath(); g.arc(ex, ey, 15, 0, 7); g.fill();
     body(ex, ey);
   };
+  // stalls you need but cannot see: the ones matching what waiting guests want, while your hands are empty
+  if (me && !me.carry && s.phase === 'run') for (const st of STATIONS) {
+    if (s.guests.some(q => q.state === 'waiting' && q.want === st.item)) pin(st.x, st.y, C.marigold, (x, y) => drawItem(g, st.item, x, y + 1), C.cream);
+  }
   for (const q of s.guests) if (q.state === 'waiting' && q.want) {
     const pc = Math.max(0, q.patience), want = q.want;
     pin(q.x + 20, q.y - 40, tone(pc), (x, y) => { g.strokeStyle = tone(pc); g.lineWidth = 4; g.beginPath(); g.arc(x, y, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pc); g.stroke(); drawItem(g, want, x, y + 1); });
   }
-  if (has('bijli')) pin(GEN.x, GEN.y, C.marigold, (x, y) => text(g, 'GEN', x, y + 1, `800 10px ${BODY}`, C.ink));
+  if (has('bijli')) pin(GEN.x, GEN.y, C.marigold, (x, y) => text(g, 'GEN', x, y + 1, `800 11px ${BODY}`, C.ink), C.cream);
 
   // one authored moment: marigold and rose petals fall when the shaadi is saved
   if (s.phase === 'over' && s.result?.won && !calm.matches) {
@@ -246,20 +276,31 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   // HUD bar
   g.fillStyle = 'rgba(8,20,18,.94)'; g.fillRect(0, 0, VW, 42);
   const iz = Math.max(0, Math.min(100, ease('izzat', s.izzat, 0, dt).x)), bx = narrow ? 58 : 64, bw = narrow ? Math.max(70, VW * 0.22) : 220;
-  text(g, 'IZZAT', narrow ? 10 : 16, 22, `800 12px ${BODY}`, C.cream, 'left');
+  text(g, 'IZZAT', narrow ? 10 : 16, 22, `800 13px ${BODY}`, C.cream, 'left');
   g.fillStyle = 'rgba(255,255,255,.16)'; rr(g, bx, 13, bw, 16, 8); g.fill();
   if (iz > 0) { g.fillStyle = iz > 50 ? C.good : iz > 25 ? C.marigold : C.alarm; rr(g, bx, 13, Math.max(16, bw * iz / 100), 16, 8); g.fill(); }
+  if (s.izzat < prevIz - 0.5) flashAt = now; // a hit: the bar flashes for 300ms
+  prevIz = s.izzat;
+  if (now - flashAt < 0.3) { g.globalAlpha = (1 - (now - flashAt) / 0.3) * 0.85; g.fillStyle = '#fff'; rr(g, bx, 13, bw, 16, 8); g.fill(); g.globalAlpha = 1; }
   text(g, String(Math.max(0, Math.round(s.izzat))), bx + bw + 8, 22, `800 14px ${BODY}`, C.cream, 'left');
   const left = Math.max(0, s.muhurat - s.t), urgent = left < 30 && s.phase === 'run';
   const clockText = s.phase === 'lobby' ? 'Muhurat' : narrow ? clock(left) : `Muhurat in ${clock(left)}`;
-  text(g, clockText, narrow ? VW - 12 : VW / 2, 23, `${narrow ? 24 : 22}px ${DISPLAY}`, urgent ? C.alarm : C.marigold, narrow ? 'right' : 'center');
-  if (!narrow) text(g, `${code ? 'Room ' + code : 'Solo'}  ·  ${s.served} served`, VW - 16, 22, `800 13px ${BODY}`, C.cream, 'right');
-  else text(g, `${s.served} served`, VW - 78, 23, `800 12px ${BODY}`, C.cream, 'right');
+  // the last 30 seconds: the clock turns to the alarm color and beats once a second
+  const beat = urgent && !calm.matches ? 1 + 0.07 * Math.abs(Math.sin(now * Math.PI)) : 1, cx = narrow ? VW - 12 : VW / 2;
+  g.save(); g.translate(cx, 23); g.scale(beat, beat);
+  text(g, clockText, 0, 0, `${narrow ? 24 : 22}px ${DISPLAY}`, urgent ? C.alarm : C.marigold, narrow ? 'right' : 'center'); g.restore();
+  const lobby = s.phase === 'lobby';
+  if (!narrow) text(g, lobby ? (code ? 'Room ' + code : 'Solo') : `${code ? 'Room ' + code : 'Solo'}  ·  ${s.served} served`, VW - 16, 22, `800 13px ${BODY}`, C.cream, 'right');
+  else if (!lobby) text(g, `${s.served} served`, VW - 78, 23, `800 13px ${BODY}`, C.cream, 'right');
 
   // disaster banners arrive in 200ms from 96% scale; they leave at once
   for (const key of bannerSeen.keys()) if (!s.disasters.some(d => d.kind === key)) bannerSeen.delete(key);
   let by = 54;
-  for (const d of s.disasters) {
+  if (guideText) { // the guide speaks in the banner lane until the first serve
+    g.font = `800 15px ${BODY}`; const w = Math.min(VW - 16, g.measureText(guideText).width + 32);
+    g.fillStyle = C.cream; rr(g, VW / 2 - w / 2, by, w, 30, 15); g.fill(); text(g, guideText, VW / 2, by + 16, `800 15px ${BODY}`, C.ink); by += 36;
+  }
+  for (const d of over ? [] : s.disasters) {
     if (!bannerSeen.has(d.kind)) bannerSeen.set(d.kind, now);
     const pr = (now - bannerSeen.get(d.kind)!) / 0.2, sc = calm.matches ? 1 : 0.96 + 0.04 * easeOut(pr);
     g.font = `800 13px ${BODY}`;
@@ -269,8 +310,8 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
     text(g, label, 0, 1, `800 13px ${BODY}`, '#fff'); g.restore(); by += 32;
   }
   // toasts: 200ms in with a short rise, 150ms out, and the stack glides when one leaves
-  const base = VH - (narrow ? 86 : 28), live = new Set<string>();
-  s.toasts.slice().reverse().forEach((t, i) => {
+  const base = VH - 28, live = new Set<string>();
+  (over ? [] : s.toasts.slice(narrow ? -2 : -3)).reverse().forEach((t, i) => { // capped so the stack never covers the lawn
     const age = s.t - t.t, a = Math.min(1, age / 0.2, (4 - age) / 0.15); if (a <= 0) return;
     const key = 'toast' + t.t + t.text; live.add(key);
     const ty = (shown.has(key) ? ease(key, 0, base - i * 30, dt) : ease(key, 0, base - i * 30, 1)).y;
@@ -284,13 +325,7 @@ export function draw(g: CanvasRenderingContext2D, s: State, myId: string, now: n
   for (const key of shown.keys()) if (key.startsWith('toast') && !live.has(key)) shown.delete(key);
   g.globalAlpha = 1;
   if (s.phase === 'lobby') {
-    text(g, narrow ? 'The lawn is ready.' : 'The lawn is ready. Walk around while the crew joins.', VW / 2, VH * 0.4, `600 ${narrow ? 16 : 18}px ${BODY}`, C.cream);
-    if (code) text(g, narrow ? `Room code ${code}` : `Tell your friends the code: ${code}`, VW / 2, VH * 0.4 + 34, `${narrow ? 22 : 26}px ${DISPLAY}`, C.marigold);
-  }
-  // touch joystick, shown where the thumb landed
-  if (joy) {
-    const jx = joy.x / view.z, jy = joy.y / view.z, r = 44 / view.z;
-    g.strokeStyle = 'rgba(255,243,214,.5)'; g.lineWidth = 2; g.beginPath(); g.arc(jx, jy, r, 0, 7); g.stroke();
-    g.fillStyle = 'rgba(255,243,214,.75)'; g.beginPath(); g.arc(jx + joy.dx * r, jy + joy.dy * r, r * 0.42, 0, 7); g.fill();
+    text(g, narrow ? 'Waiting for the crew' : 'The lawn is ready. Walk around while the crew joins.', VW / 2, VH * 0.36, `600 ${narrow ? 16 : 18}px ${BODY}`, C.cream);
+    if (code) text(g, narrow ? `Room code ${code}` : `Tell your friends the code: ${code}`, VW / 2, VH * 0.36 + 34, `${narrow ? 22 : 26}px ${DISPLAY}`, C.marigold);
   }
 }

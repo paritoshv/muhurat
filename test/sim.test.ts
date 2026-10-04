@@ -1,7 +1,7 @@
 // Runs greedy bots through full weddings: checks the sim terminates, is
 // deterministic per seed, and reports win rates for balance tuning.
 import assert from 'node:assert';
-import { Sim, STATIONS, GEN, dailySeed, type State } from '../src/shared/sim';
+import { Sim, STATIONS, GEN, dailySeed, clipName, type State } from '../src/shared/sim';
 
 function botInput(s: State, i: number): [number, number] {
   const p = s.players[i];
@@ -63,12 +63,13 @@ import { handle, type KV } from '../netlify/functions/board/index.mts';
   const post = (body: unknown) => handle(new Request('https://x/api/score', { method: 'POST', body: JSON.stringify(body) }), kv, '1.2.3.4');
   const ok = await (await post({ seed, name: 'paritosh', log })).json();
   assert.equal(ok.score, sim.s.result!.score); assert.equal(ok.rank, 1);
-  assert.equal((await post({ seed, name: 'idle', log: [] })).status, 200, 'an idle run is a real (losing) run');
+  assert.equal((await post({ seed, name: 'idle', log: [] })).status, 422, 'an idle run never reaches the board');
   assert.equal((await post({ seed: 'daily-2020-01-01', name: 'old', log })).status, 400);
   assert.equal((await post({ seed, name: 'x', log })).status, 422);
   assert.equal((await post({ seed, name: 'cheat', log: [[0, 5, 0, 0]] })).status, 400);
   const board = await (await handle(new Request('https://x/api/board'), kv, '1.2.3.4')).json();
-  assert.deepEqual(board.top.map((e: any) => e.name), ['PARITOSH', 'IDLE']);
+  assert.deepEqual(board.top.map((e: any) => e.name), ['PARITOSH']);
   console.log('board:', board.top.map((e: any) => `${e.name} ${e.score}`).join(', '));
+  for (const [raw, want] of [['  Sam   Lee ', 'Sam Lee'], ['👩🏽‍💻 Priya', '👩🏽‍💻 Priy'], ['Aleksandra Wiśniewska', 'Aleksandra W'], ['🦊🦊🦊🦊🦊🦊🦊', '🦊🦊🦊🦊🦊🦊']] as const) assert.equal(clipName(raw), want);
 }
 console.log('ok');
