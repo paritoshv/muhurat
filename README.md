@@ -1,5 +1,7 @@
 # Muhurat
 
+**Play it: https://muhurat.paritosh.space**
+
 A co-op chaos game for 1-6 players. Your crew runs a shaadi: keep the relatives fed, seated and calm until the muhurat. Prototype of the core run.
 
 ## Run it
